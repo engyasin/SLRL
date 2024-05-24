@@ -1,0 +1,15 @@
+*.pth
+*.npy
+*.avi
+runs/
+indds/
+!bc_agent_ind_50_20_last_step.pth
+!bc_agent_ind_50_20_one_step.pth
+!bc_agent_ind_35_20_last_step.pth
+!bc_agent_ind_35_20_one_step.pth
+__pycache__/
+vis.py
+bc_onestep.py
+ind_preprocessing.ipynb
+*.docx
+TODO

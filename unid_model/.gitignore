@@ -1,0 +1,11 @@
+*.pth
+*.npy
+*.avi
+runs/
+unids/
+*.png
+!bc_agent_unid_35_20_last_step.pth
+!bc_agent_unid_35_20_one_step.pth
+__pycache__/
+vis.py
+*docx
