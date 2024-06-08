@@ -6,6 +6,8 @@ unids/
 *.png
 !bc_agent_unid_35_20_last_step.pth
 !bc_agent_unid_35_20_one_step.pth
+!output_unid.avi
+!ppo_agent_unid_image_d_smoothed_first_step_new.pth
 __pycache__/
 vis.py
 *docx

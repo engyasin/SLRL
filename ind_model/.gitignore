@@ -7,6 +7,9 @@ indds/
 !bc_agent_ind_50_20_one_step.pth
 !bc_agent_ind_35_20_last_step.pth
 !bc_agent_ind_35_20_one_step.pth
+!output_ind.avi
+!ppo_agent_ind_image_d_last_step_5.pth
+!ppo_agent_ind_image_d_smoothed_first_step_kmeans_20.pth
 __pycache__/
 vis.py
 bc_onestep.py
