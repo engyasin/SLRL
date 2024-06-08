@@ -20,11 +20,12 @@ To install :`pip install -r requirements.txt`
 ## Videos of the results:
 
 **Intesection Case**
-<iframe src='./ind_model/output_ind.mp4' frameborder="0" width="100%" height="300"></iframe>
+<iframe src='https://drive.google.com/file/d/1KGM0F6rGjU-5SCRQjaKTfU5qXyulnXed/view?usp=drivesdk' frameborder="0" width="100%" height="300"></iframe>
+
 
 
 **Shared Space Case**
-<iframe src='./unid_model/output_unid.mp4' frameborder="0" width="100%" height="300"></iframe>
+<iframe src='https://drive.google.com/file/d/1c1v-hG0oguRjn16_-UO2kHmjM_JdgUIm/view?usp=drivesdk' frameborder="0" width="100%" height="300"></iframe>
 
 To run the trained model, just cd to either `unid_model` or `ind_model` and run:
 
