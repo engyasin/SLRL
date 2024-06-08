@@ -4,7 +4,7 @@
 # Traffic Simulation for mixed traffic based on supervised learning models guided by reinforcement learning.
 
 
-<p align="center">
+<p align="center" style="background-color:white;">
   <img src="methodology.png" style="background-color:white;"/>
 </p>
 
