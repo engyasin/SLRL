@@ -1,14 +1,12 @@
 
 
 
-
-
 # Traffic Simulation for mixed traffic based on supervised learning models guided by reinforcement learning.
 
-<center>
-<img src="methodology.png" />
-</center>
 
+<p align="center">
+  <img src="methodology.png" />
+</p>
 
 This code is related to the paper titled: 
 
