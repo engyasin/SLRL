@@ -14,7 +14,10 @@ To install :`pip install -r requirements.txt`
 
 ## Citation:
 
-*Will change later*
+PDF of the paper is [avaliable here](paper.pdf)
+
+*Will change later* 
+
 
 ```bibtex
 @InProceedings{yousif2024,
@@ -27,7 +30,7 @@ address="Cham",
 note={\textit{To appear}}
 ```
 
-PDF of the paper is [avaliable here](paper.pdf)
+
 
 
 ## Videos of the results:
