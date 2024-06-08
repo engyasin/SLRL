@@ -5,7 +5,7 @@
 
 
 <p align="center">
-  <img src="methodology.png" />
+  <img src="methodology.png" style="background-color:white;"/>
 </p>
 
 This code is related to the paper titled: 
