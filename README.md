@@ -27,7 +27,7 @@ booktitle="Advances in Practical Applications of Agents, Multi-Agent Systems, an
 year="2024",
 publisher="Springer Nature Switzerland",
 address="Cham",
-note={\textit{To appear}}
+note="To appear"}
 ```
 
 
