@@ -4,6 +4,9 @@
 *.docx
 unid_model/runs/
 unid_model/unids/
+!unid_model/ppo_agent_unid_image_d_smoothed_first_step_new.pth
+unid_model/make_video.py
+!unid_model/output_unid.avi
 !unid_model/bc_agent_unid_35_20_last_step.pth
 !unid_model/bc_agent_unid_35_20_one_step.pth
 unid_model/__pycache__/
@@ -14,8 +17,14 @@ ind_model/indds/
 !ind_model/bc_agent_ind_50_20_one_step.pth
 !ind_model/bc_agent_ind_35_20_last_step.pth
 !ind_model/bc_agent_ind_35_20_one_step.pth
+!ind_model/output_ind.avi
+!ind_model/ppo_agent_ind_image_d_last_step_5.pth
 ind_model/__pycache__/
 ind_model/vis.py
 ind_model/bc_onestep.py
+ind_model/bc_ml.py
+ind_model/bc_old.py
+ind_model/bc_ml_kmeans.py
+ind_model/make_video.py
 ind_model/ind_preprocessing.ipynb
 ind_model/TODO

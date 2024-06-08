@@ -25,7 +25,7 @@ class TrafficEnvMod(TrafficEnv):
     
     def __init__(self, w=182, h=114, num_agents=..., max_steps=17, 
                  pixel2meter=None, make_img=False, img_size=[10,10],
-                 n_modes=20,first_step=False):
+                 n_modes=20,first_step=True):
         
         img_file = 'background_img.png'
 
@@ -220,7 +220,10 @@ class TrafficEnvMod(TrafficEnv):
         # state: speed,near,(type),lost
         self.zs = self.types.copy()
         
+        self.starting_port = []#np.linalg.norm((self.poses - self.ports[:,None,:]).reshape(-1,2),axis=1).reshape(len(self.ports),-1).argmin(axis=0)        
 
+        #self.headings[(self.types>0)*(self.starting_port==5)] = -1*np.pi/4
+        #self.headings[(self.types>0)*(self.starting_port==6)] = 3*np.pi/4
         
         self.max_time = self.time+max_steps
     
@@ -256,9 +259,11 @@ if __name__ == '__main__':
     max_steps = 32
     
     
-    env = TrafficEnvMod(make_img=True,img_size=[20,30],first_step=False)
-    model_bc = torch.load(f'bc_agent_unid_{35}_{N_modes}_last_step.pth',map_location=torch.device('cpu'))
-    model = torch.load('ppo_agent_unid_image_d_last_step_1.pth',map_location=torch.device('cpu'))
+    env = TrafficEnvMod(make_img=True,img_size=[20,30],first_step=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_bc = torch.load(f'bc_agent_unid_{35}_{N_modes}_last_step.pth',map_location=device)
+    #model = torch.load('ppo_agent_unid_image_d_last_step_1.pth',map_location=device)
+    model = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][env.first_step]}_new.pth',map_location=device)
     
     full_errors = []
     errors_dict_ped = {i:[] for i in range(max_steps)}
@@ -275,7 +280,7 @@ if __name__ == '__main__':
         while not(done[0]):
             action_ = np.random.random((env.num_agents,2+N_modes))
             with torch.no_grad():
-                action_t,z_logits = env.bc_models.get_action(torch.Tensor(new_state),best=True)
+                action_t,z_logits = env.bc_models.get_action(torch.Tensor(new_state).to(device),best=True)
                 action_ = torch.hstack((action_t,torch.sigmoid(z_logits))).cpu().numpy()
 
             while True:

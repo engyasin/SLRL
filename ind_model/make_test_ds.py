@@ -290,7 +290,8 @@ if __name__ == '__main__':
     #model = torch.load('ppo_agent_ind_image_z.pth',map_location=torch.device('cpu'))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_bc = torch.load(f'bc_agent_ind_{75}_{N_modes}_one_step.pth',map_location=device)
-    model = torch.load('ppo_agent_ind_image_d_smoothed_last_step_35.pth',map_location=device)
+    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_{N_modes}.pth',map_location=device)
+    #model = torch.load('ppo_agent_ind_image_d_smoothed_last_step_35.pth',map_location=device)
     full_errors = []
     max_steps = 18
     errors_dict_ped = {i:[] for i in range(max_steps)}

@@ -163,7 +163,9 @@ def main():
     
     env = TrafficEnvMod(make_img=True,num_agents=64,img_size=[20,30],n_modes=N_MODES)#[12,20]
     
-    model = torch.load('ppo_agent_ind_image_d_last_step_5.pth',map_location=torch.device('cpu'))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_{N_MODES}.pth',map_location=device)
+
     model.center = [10,6]
     sucess_r, avg_surv, avg_speed = [],[],[]
     for scene in range(64):
@@ -174,11 +176,11 @@ def main():
         all_rewards = 0
         while not(done):
             with torch.no_grad():
-                #action = model.get_action(torch.Tensor(new_state),torch.Tensor(new_img_state),best=True).cpu().numpy()#*np.array([0.025,0])
-                action_bc = env.bc_models.get_z(torch.Tensor(new_state)).argmax(axis=1).cpu().numpy()
+                action = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True).cpu().numpy()#*np.array([0.025,0])
+                #action = env.bc_models.get_z(torch.Tensor(new_state).to(device)).argmax(axis=1).cpu().numpy()
 
             #breakpoint()
-            new_state, rewards, done,info,new_img_state = env.step(action_bc)#-env.poses)
+            new_state, rewards, done,info,new_img_state = env.step(action)#-env.poses)
             env.find_statics()
             all_rewards += rewards
             if type(done)==list:

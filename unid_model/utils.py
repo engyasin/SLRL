@@ -20,7 +20,7 @@ import torch.nn.functional as F
 
 from torch.utils.data import Dataset, DataLoader
 from torch.distributions.normal import Normal
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans,DBSCAN
 
 
 def load(type_=0):
@@ -73,9 +73,10 @@ def load_all_mode(device,modes_n = 5, return_clusterers=False):
         expert_states_,expert_actions_,expert_test_states_,expert_test_actions_ = load(type_=type_)
         
         # NOTE degree of smoothing: first/last point
-        smoothed_dp = np.unique(np.round(expert_actions_[:,:2],2),axis=0)
+        smoothed_dp = np.unique(np.round(expert_actions_[:,:2],3),axis=0)
 
         clusterer = KMeans(n_clusters=modes_n,random_state=42).fit(smoothed_dp)#,n_init=10 # NOTE first step
+        #clusterer = DBSCAN(eps=2,min_samples=5).fit(smoothed_dp)#,n_init=10 # NOTE first step
         clusterer_labels_ = clusterer.predict(expert_actions_[:,:2])
         expert_actions_ = (np.hstack((expert_actions_,clusterer_labels_[:,None])))#.to(device)
         expert_test_actions_ = (np.hstack((expert_test_actions_,clusterer.predict(expert_test_actions_[:,:2])[:,None])))#.to(device)

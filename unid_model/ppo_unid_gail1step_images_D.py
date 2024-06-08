@@ -43,13 +43,13 @@ def parse_args():
     # Algorithm specific arguments
     parser.add_argument("--env-id", type=str, default="ind_gail_image",
         help="the id of the environment")
-    parser.add_argument("--total-timesteps", type=int, default=7000000,
+    parser.add_argument("--total-timesteps", type=int, default=30000000,
         help="total timesteps of the experiments")
-    parser.add_argument("--learning-rate", type=float, default=5.0e-4,
+    parser.add_argument("--learning-rate", type=float, default=2.0e-3,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=32,
+    parser.add_argument("--num-envs", type=int, default=64,
         help="the number of parallel game environments")
-    parser.add_argument("--num-steps", type=int, default=16,
+    parser.add_argument("--num-steps", type=int, default=32,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -67,7 +67,7 @@ def parse_args():
         help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--ent-coef", type=float, default=0.1,
+    parser.add_argument("--ent-coef", type=float, default=0.02,
         help="coefficient of the entropy")
     parser.add_argument("--vf-coef", type=float, default=0.5,
         help="coefficient of the value function")
@@ -108,6 +108,8 @@ if __name__ == "__main__":
     envs = TrafficEnv(num_agents=args.num_envs,make_img=True,img_size=img_size,n_modes=N_MODES,first_step=True)
 
     agent = Agent(envs,img_size=img_size,clusterers=clusterers).to(device)
+    agent = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_new.pth',map_location=device)
+
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     
     
@@ -266,4 +268,4 @@ if __name__ == "__main__":
                 
     #envs.close()
     writer.close()
-    torch.save(agent,f'ppo_agent_unid_image_d_smoothed_{["last_step","frist_step"][envs.first_step]}.pth')
+    torch.save(agent,f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_new.pth')

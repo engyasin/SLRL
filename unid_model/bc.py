@@ -99,13 +99,13 @@ def main():
     N_modes = 20
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     expert_states, expert_actions, expert_test_states, expert_test_actions, clusterers = load_all_mode(device,modes_n=N_modes,return_clusterers=True)
-    print(device)
     batch_size = 512
-    lr = 0.001
-    epochs = 50
+    lr = 0.0001
+    epochs = 100
     steps_per_epoch = expert_states.shape[0]//batch_size
 
-
+    val_split = 20000
+    min_loss = 1e5
     agent = AgentCNN_Z_BC_MB(None,n_modes=N_modes).to(device)
     optimizer = optim.Adam(params=agent.parameters(),lr=lr)
     criterion_z = nn.BCEWithLogitsLoss()
@@ -114,35 +114,46 @@ def main():
         all_losses = 0
         agent.train()
         for step in range(steps_per_epoch):
-            out_z = agent.get_z(expert_states[step*batch_size:(step+1)*batch_size,:10],best=False)
+            #out_z = agent.get_z(expert_states[step*batch_size:(step+1)*batch_size,:10],best=False)
             z_label = torch.nn.functional.one_hot((expert_actions[step*batch_size:(step+1)*batch_size,2]).long(),
                                                   num_classes=agent.n_modes)
             out,_ = agent.get_action(expert_states[step*batch_size:(step+1)*batch_size,:10],z_logits=z_label.clone(),best=False)
             loss = torch.sqrt(((expert_actions[step*batch_size:(step+1)*batch_size,:2]-out)**2).sum(axis=1)).mean()
 
-            loss_z = criterion_z(out_z,z_label.float())
+            #loss_z = criterion_z(out_z,z_label.float())
 
             optimizer.zero_grad()
                 
-            (loss+loss_z).backward()
+            (loss).backward()
                 
             optimizer.step()
                 
-            all_losses +=  loss_z.item()+loss.item()
+            all_losses +=  loss.item()
     
         print(f'Epoch {epoch}: {all_losses} Loss')
-        
+
+        agent.eval()
+        with torch.no_grad():
+            out,_  = agent.get_action(expert_test_states[:val_split,:10],best=True)
+            loss_ = torch.sqrt(((expert_test_actions[:val_split,:2]-out)**2).sum(axis=1))
+            loss = loss_.mean()
+            #loss_z = ((out_z.argmax(axis=1)) == (expert_test_actions[:,2])).sum()/expert_test_actions.shape[0]
+        print(f'Eval Loss: {loss.item()} ')
+        if min_loss > loss.item():
+            min_loss = loss.item()
+            torch.save(agent,f'bc_agent_unid_{epochs}_{agent.n_modes}_smoothed_one_step_new.pth')
+            print('Model saved')
     agent.eval()
     with torch.no_grad():
-        out,out_z = agent.get_action(expert_test_states[:,:10],best=True)
-        loss_ = torch.sqrt(((expert_test_actions[:,:2]-out)**2).sum(axis=1))
+        out,out_z = agent.get_action(expert_test_states[val_split:,:10],best=True)
+        loss_ = torch.sqrt(((expert_test_actions[val_split:,:2]-out)**2).sum(axis=1))
         loss = loss_.mean()
-        loss_z = ((out_z.argmax(axis=1)) == (expert_test_actions[:,2])).sum()/expert_test_actions.shape[0]
+        #loss_z = ((out_z.argmax(axis=1)) == (expert_test_actions[:,2])).sum()/expert_test_actions.shape[0]
 
     print(f'Test Loss: {loss.item()} ')
-    print(f'Test Z Acc: {loss_z} ')
+    #print(f'Test Z Acc: {loss_z} ')
             
-    torch.save(agent,f'bc_agent_unid_{epochs}_{agent.n_modes}_one_step.pth')
+    torch.save(agent,f'bc_agent_unid_{epochs}_{agent.n_modes}_smoothed_one_step_new_last.pth')
 
 
 

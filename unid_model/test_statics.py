@@ -28,7 +28,7 @@ class TrafficEnvMod(TrafficEnv):
     
     def __init__(self,w=182,h=114,num_agents = 15 + np.random.randint(15),max_steps=17,pixel2meter=None,make_img=False,img_size=[10,10],n_modes=20):
         self.speed_record = []
-        super().__init__(w, h, num_agents, max_steps, pixel2meter, make_img, img_size,n_modes)
+        super().__init__(w, h, num_agents, max_steps, pixel2meter, make_img, img_size,n_modes,first_step=True)
    
     def load_ds_scene(self):
         img_file = 'background_img.png'
@@ -145,7 +145,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     env = TrafficEnvMod(make_img=True,num_agents=64,img_size=[20,30],n_modes=N_MODES)#[12,20]
     
-    model = torch.load('ppo_agent_unid_image_d_last_step_1.pth',map_location=device)
+    model = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][env.first_step]}_new.pth',map_location=device)
     
     sucess_r, avg_surv, avg_speed = [],[],[]
     for scene in range(64):
@@ -157,7 +157,7 @@ def main():
         while not(done):
             with torch.no_grad():
                 action = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True).cpu().numpy()#*np.array([0.025,0])
-                #action = env.bc_models.get_z(torch.Tensor(new_state).to(device)).cpu().numpy()#.argmax(axis=1)
+                #action = env.bc_model
 
             new_state, rewards, done,info,new_img_state = env.step(action)#-env.poses)
             env.find_statics()
