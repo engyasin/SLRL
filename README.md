@@ -10,9 +10,10 @@
 
 This code is related to the paper titled: 
 
-<center>
+<p align="center">
 <b>Integrating Supervised and Reinforcement Learning for Heterogeneous Traffic Simulation</b>
-</center>
+</p>
+
 
 ## Installation:
 `pip install -r requirements.txt`
