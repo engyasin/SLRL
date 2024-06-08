@@ -3,7 +3,8 @@
 
 
 
-# Traffic Simulation for mixed traffic based on supervised learning models guided by reinforcment learning.
+# Traffic Simulation for mixed traffic based on supervised learning models guided by reinforcement learning.
+
 
 This code is related to the paper titled: 
 
@@ -38,7 +39,7 @@ PDF of the paper is [avaliable here](paper.pdf)
 
 ## Videos of the results:
 
-**Intesection Case**
+**Intersection Case**
 
 ![](ind_model/output_ind.gif)
 
