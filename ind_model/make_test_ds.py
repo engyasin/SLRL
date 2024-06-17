@@ -24,7 +24,7 @@ from trafficenv_D import TrafficEnv
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-SCENE_ID = 30#30:,31: ,32:
+SCENE_ID = 32#30:,31: ,32:
 class TrafficEnvMod(TrafficEnv):
     
     def __init__(self, w=182, h=114, num_agents=..., max_steps=17, pixel2meter=None, make_img=False, img_size=[10,10]):
@@ -234,6 +234,9 @@ class TrafficEnvMod(TrafficEnv):
                 self.time += 1
             else:
                 break
+        self.starting_poses = []
+
+
         self.speeds /= 2.5
         self.step_orders = {track:0 for track in self.trackIds}
 
@@ -310,9 +313,9 @@ if __name__ == '__main__':
             action_ = np.random.random((env.num_agents,2+16))
             #new_img_state = abs(255-new_img_state)
             with torch.no_grad():
-                z_logits_ = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True)#.cpu().numpy()#*np.array([0.025,0])
-                z_logits = torch.nn.functional.one_hot(z_logits_,num_classes=20).to(device)
-                action_t,z_logits = model_bc.get_action(torch.Tensor(new_state).to(device),z_logits=z_logits,best=True)#z_logits=z_logits,
+                #z_logits_ = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True)#.cpu().numpy()#*np.array([0.025,0])
+                #z_logits = torch.nn.functional.one_hot(z_logits_,num_classes=20).to(device)
+                action_t,z_logits = model_bc.get_action(torch.Tensor(new_state).to(device),best=True)#z_logits=z_logits,
                 action_ = torch.hstack((action_t,torch.sigmoid(z_logits))).cpu().numpy()#*np.array([0.025,0])
 
             while True:

@@ -308,6 +308,7 @@ def main():
                     plt.axis('off')
                 plt.show()
             new_state, rewards, done,info,new_img_state = env.step(action)
+            env.make_image_()
             env.render()
 
             cv2.waitKey(1)#000)

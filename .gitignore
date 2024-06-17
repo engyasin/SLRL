@@ -17,6 +17,7 @@ ind_model/indds/
 !ind_model/bc_agent_ind_50_20_one_step.pth
 !ind_model/bc_agent_ind_35_20_last_step.pth
 !ind_model/bc_agent_ind_35_20_one_step.pth
+!ind_model/bc_agent_ind_75_20_one_step
 !ind_model/output_ind.avi
 !ind_model/ppo_agent_ind_image_d_last_step_5.pth
 ind_model/__pycache__/

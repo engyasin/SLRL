@@ -61,3 +61,6 @@ To run the trained model, just cd to either `unid_model` or `ind_model` and run:
 
 
 
+## Help
+
+For discussing of issues and problems running the code, please consider creating an issue

@@ -46,9 +46,11 @@ class TrafficEnv():
         _ = self.reset(num_agents=num_agents, max_steps=max_steps, pixel2meter=pixel2meter)
         self.first_step = True
         self.n_modes = n_modes
-        self.bc_models = torch.load(f'bc_agent_ind_{75}_{n_modes}_one_step.pth')
-        #self.bc_models = torch.load(f'bc_agent_ind_{100}_{n_modes}_ml_type_{4}_.pth')
-        #self.bc_models = torch.load(f'bc_agent_ind_{100}_{n_modes}_kmeans.pth')
+        self.bc_models = torch.load(f'bc_agent_ind_{75}_{n_modes}_one_step.pth',map_location=device)
+        #self.bc_models = torch.load(f'bc_agent_ind_{35}_{n_modes}_last_step.pth',map_location=device)
+
+        ##self.bc_models = torch.load(f'bc_agent_ind_{100}_{n_modes}_ml_type_{4}_.pth')
+        ##self.bc_models = torch.load(f'bc_agent_ind_{100}_{n_modes}_kmeans.pth')
         self.bc_models.to(device)
         self.bc_models.eval()
         
@@ -90,7 +92,7 @@ class TrafficEnv():
 
         rewards_goal = np.zeros_like(self.speeds)
         mask_out = np.logical_or(((self.poses[:,0]<=0)+(self.poses[:,0]>=self.w)), 
-                                 ((self.poses[:,1]<=0)+(self.poses[:,1]>=self.h)))
+                                 ((self.poses[:,1]<=0)+(self.poses[:,1]>=self.h)))*(bool(len(self.starting_poses)))
         if mask_out.any():
             mask_1 = np.linalg.norm((self.starting_poses[mask_out] - self.ports_poses[:,None,:]).reshape(-1,2),axis=1).reshape(len(self.ports_poses),-1)>(self.w//3)
             mask_2 = np.linalg.norm((self.poses[mask_out] - self.ports_poses[:,None,:]).reshape(-1,2),axis=1).reshape(len(self.ports_poses),-1)<8
@@ -105,7 +107,7 @@ class TrafficEnv():
         
         self.poses = self.poses%np.array([self.w,self.h])
         
-        if mask_out.any():
+        if mask_out.any() :
             self.starting_poses[mask_out] = self.poses[mask_out].copy()
         
         self.acceleration = ((self.speeds*2.5)-(self.history[-1][:,0:1]))*2.5 # NOTE
