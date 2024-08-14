@@ -5,7 +5,6 @@ from utils import *
 from matplotlib import pyplot as plt
 
 from agents import AgentCNN_D as Agent
-#from bc import AgentCNN_Z_BC 
 from bc import AgentCNN_Z_BC_MB
 
 from sklearn.cluster import KMeans
@@ -15,6 +14,7 @@ import os
 import cv2
 
 from agents import Discriminator
+from train_reward_offline import RewardModeSequance,LongTermDiscriminator
 from utils import load_all_mode
 
 import torch
@@ -27,7 +27,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SCENE_ID = 32#30:,31: ,32:
 class TrafficEnvMod(TrafficEnv):
     
-    def __init__(self, w=182, h=114, num_agents=..., max_steps=17, pixel2meter=None, make_img=False, img_size=[10,10]):
+    def __init__(self, w=182, h=114, num_agents=..., max_steps=17, pixel2meter=None, make_img=False, img_size=[10,10], train = False):
         
         img_file = 'img_extended_cut.png'
         self.scale = 0.00814635379575616 * 12 # fixed for scene 30-32
@@ -61,11 +61,17 @@ class TrafficEnvMod(TrafficEnv):
         self.r3 = 20
         
         self.make_img = make_img
+        self.default_scale = 3
         self.imgs_states = None
         self.img_size = img_size
-        
+        self.traj_mode_len = 9
+        self.train = train
+
         self.first_step = True
         self.n_modes = 20
+
+        self.initial_grid =  cv2.resize(bg_img,dsize=[int(self.w)*self.default_scale,
+                                                      int(self.h)*self.default_scale])
         
 
         if self.first_step:
@@ -75,6 +81,9 @@ class TrafficEnvMod(TrafficEnv):
             
         self.bc_models.eval()
         
+        self.reward_traj_length = 18
+        self.trained_reward = torch.load(f'reward_{self.reward_traj_length}_steps_ind_0_{self.n_modes}.pth',map_location=device).to(device)
+        self.trained_reward.eval()
         
         _ = self.reset(num_agents=num_agents, max_steps=max_steps, pixel2meter=pixel2meter)
         
@@ -175,7 +184,7 @@ class TrafficEnvMod(TrafficEnv):
         # just add or remove agents. No more
         to_delete = np.lib.setdiff1d(self.trackIds,trackIds)
         to_add = np.lib.setdiff1d(trackIds,self.trackIds)
-        
+        old_trajs_modes = self.states[:,10:]
         for track in to_add:
             j = trackIds.index(track)
             self.poses = np.append(self.poses,poses[j:j+1,:],axis=0)
@@ -185,6 +194,7 @@ class TrafficEnvMod(TrafficEnv):
             self.headings = np.append(self.headings,headings[j])
             self.trackIds.append(track)
             self.step_orders.update({track:0})
+            old_trajs_modes = np.append(old_trajs_modes,np.zeros((1,old_trajs_modes.shape[1]))-1,axis=0)
             
         for track in to_delete:
             j = self.trackIds.index(track)
@@ -194,10 +204,11 @@ class TrafficEnvMod(TrafficEnv):
             self.acceleration = np.vstack((self.acceleration[:j],self.acceleration[j+1:]))
             self.headings = np.hstack((self.headings[:j],self.headings[j+1:]))
             self.trackIds.pop(j)
+
+            old_trajs_modes = np.vstack((old_trajs_modes[:j],old_trajs_modes[j+1:,:]))
             
         self.num_agents = self.poses.shape[0]
         self.zs = self.types.copy()
-        
         self.rs = 0
         
         self.near_objs = self.update_near_objs()
@@ -208,7 +219,9 @@ class TrafficEnvMod(TrafficEnv):
             self.make_image()
             self.imgs_states = np.array([self.get_agent_image(i) for i in range(self.num_agents)])
         try:
-            self.states = np.hstack((abs(self.speeds*2.5),(self.headings[:,None]%(2*np.pi)),self.near_objs,self.zs[:,None],abs(self.acceleration)))
+            self.states = np.hstack((abs(self.speeds*2.5),(self.headings[:,None]%(2*np.pi)),
+                                     self.near_objs,self.zs[:,None],abs(self.acceleration),
+                                     old_trajs_modes))
         except ValueError:
             breakpoint()
             
@@ -216,11 +229,13 @@ class TrafficEnvMod(TrafficEnv):
         self.history.append(self.states.copy())
         self.history_poses = []
         self.history_poses.append(self.poses.copy())
+
+        self.history_z = (old_trajs_modes.T[-self.time:]).tolist()
         
         return self.states.copy(),self.imgs_states
 
     
-    def reset(self, num_agents=..., max_steps=17, pixel2meter=None):
+    def reset(self, num_agents=..., max_steps=17, pixel2meter=None,training_time=1):
         
         
         self.grid = np.zeros((self.h,self.w,3)) # 1 pixel = 1 meter
@@ -263,11 +278,13 @@ class TrafficEnvMod(TrafficEnv):
         self.near_objs = self.update_near_objs()
         
         if self.make_img:
-            self.make_image()
+            self.make_image_()
             
             self.imgs_states = np.array([self.get_agent_image(i) for i in range(self.num_agents)])
         
-        self.states = np.hstack((abs(self.speeds)*2.5,(self.headings[:,None]%(2*np.pi)),self.near_objs,self.zs[:,None],self.acceleration))
+        self.states = np.hstack((abs(self.speeds)*2.5,(self.headings[:,None]%(2*np.pi)),self.near_objs,
+                                 self.zs[:,None],self.acceleration,
+                                np.zeros((self.num_agents,self.traj_mode_len))-1))
         self.history = []
         self.history.append(self.states.copy())
         self.history_poses = []
@@ -289,11 +306,12 @@ if __name__ == '__main__':
     
     #main(x=30)
     N_modes = 20 
-    env = TrafficEnvMod(make_img=True,img_size=[20,30])
+    env = TrafficEnvMod(make_img=True,img_size=[20,40])
     #model = torch.load('ppo_agent_ind_image_z.pth',map_location=torch.device('cpu'))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_bc = torch.load(f'bc_agent_ind_{75}_{N_modes}_one_step.pth',map_location=device)
     model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_{N_modes}.pth',map_location=device)
+    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_modes}_1.pth',map_location=device)
     #model = torch.load('ppo_agent_ind_image_d_smoothed_last_step_35.pth',map_location=device)
     full_errors = []
     max_steps = 18
@@ -313,10 +331,13 @@ if __name__ == '__main__':
             action_ = np.random.random((env.num_agents,2+16))
             #new_img_state = abs(255-new_img_state)
             with torch.no_grad():
-                #z_logits_ = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True)#.cpu().numpy()#*np.array([0.025,0])
+                # rl
+                z_logits_ = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True)#.cpu().numpy()#*np.array([0.025,0])
                 #z_logits = torch.nn.functional.one_hot(z_logits_,num_classes=20).to(device)
-                action_t,z_logits = model_bc.get_action(torch.Tensor(new_state).to(device),best=True)#z_logits=z_logits,
-                action_ = torch.hstack((action_t,torch.sigmoid(z_logits))).cpu().numpy()#*np.array([0.025,0])
+
+                # bc
+                #action_t,z_logits = model_bc.get_action(torch.Tensor(new_state).to(device),best=True,z_logits=z_logits)
+                #action_ = torch.hstack((action_t,torch.sigmoid(z_logits))).cpu().numpy()#*np.array([0.025,0])
 
             while True:
                 poses,types,speeds,acceleration,headings,tracks = env.get_demo_data(scene_ids=[SCENE_ID], step_id=env.time + (env.time==0))
@@ -337,7 +358,7 @@ if __name__ == '__main__':
  
                 set_rule = False
                 
-            new_state, rewards, done,info,new_img_state = env.step(actions_d=(z_logits.cpu().numpy()))#-env.poses)
+            new_state, rewards, done,info,new_img_state = env.step(actions_d=(z_logits_.cpu().numpy()))#-env.poses)
             if all(done): continue
             new_state, new_img_state = env.update(poses,types,speeds,acceleration,headings,tracks)
             

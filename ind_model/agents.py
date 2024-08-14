@@ -282,7 +282,7 @@ class AgentCNN_D(nn.Module):
         self.n_modes = n_modes
 
         self.network = nn.Sequential(
-            layer_init(nn.Conv2d(3, 32, 7, stride=1)),
+            layer_init(nn.Conv2d(3*1, 32, 7, stride=1)),
             nn.ReLU(),
             layer_init(nn.Conv2d(32, 8, 3, stride=1)),
             nn.ReLU(),
@@ -292,7 +292,7 @@ class AgentCNN_D(nn.Module):
         )
         
         self.vector_state = nn.Sequential(
-            layer_init(nn.Linear(10,16)),
+            layer_init(nn.Linear(10+envs.traj_mode_len,16)),
             nn.ReLU(),
         )
         

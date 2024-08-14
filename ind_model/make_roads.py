@@ -11,11 +11,10 @@ import os
 import cv2
 
 
-def get_random_scene(w,h):
+def get_random_scene(w,h,lane_width = 2):
     
     img = np.zeros((h,w,3))
     
-    lane_width = 2
     #main road
     a = np.random.randint(0,h//2),0
     b = np.random.randint(h//2,h),(w-1)

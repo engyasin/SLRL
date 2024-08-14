@@ -22,6 +22,7 @@ from agents import AgentCNN_D as Agent
 from utils import load,load_all_mode
 #from bc_ml import AgentClustererAll,AgentClusterer
 from bc import AgentClustererAll,Agent_BC_MB
+from train_reward_offline import RewardModeSequance, LongTermDiscriminator
 
 Fully_matched_trajs_thresh = 20
 model_id = 0
@@ -52,9 +53,9 @@ def parse_args():
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5.0e-4,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=32,
+    parser.add_argument("--num-envs", type=int, default=64,
         help="the number of parallel game environments")
-    parser.add_argument("--num-steps", type=int, default=32,
+    parser.add_argument("--num-steps", type=int, default=32*1,
         help="the number of steps to run in each environment per policy rollout")
     parser.add_argument("--anneal-lr", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggle learning rate annealing for policy and value networks")
@@ -72,7 +73,7 @@ def parse_args():
         help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--ent-coef", type=float, default=0.04,
+    parser.add_argument("--ent-coef", type=float, default=0.02,
         help="coefficient of the entropy")
     parser.add_argument("--vf-coef", type=float, default=0.5,
         help="coefficient of the value function")
@@ -111,24 +112,26 @@ if __name__ == "__main__":
     #expert_states,expert_actions,expert_test_states,expert_test_actions,clusterers = load_all_mode(device,modes_n = N_MODES, return_clusterers=True)
     
     
-    img_size = [20,30]#y,x
+    img_size = [20,40]#y,x
 
-    envs = TrafficEnv(num_agents=args.num_envs,make_img=True,img_size=img_size,n_modes=N_MODES)
+    envs = TrafficEnv(num_agents=args.num_envs,make_img=True,img_size=img_size,n_modes=N_MODES,train=True)
 
     agent = Agent(envs,img_size=img_size,clusterers=clusterers,n_modes=N_MODES).to(device)
+    agent =   torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_MODES}_1.pth',map_location=device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     
     # crate expert dataset
     #obs_expert = torch.zeros((1000,9)).to(device)
     #actions_expert = torch.zeros((1000,2)).to(device)
     
-    
-    done,new_state,new_img_state = envs.reset(num_agents=args.num_envs,max_steps=args.num_steps)
-
+    global_step = 0
+    done,new_state,new_img_state = envs.reset(num_agents=args.num_envs,max_steps=args.num_steps,
+                                              training_time=global_step/args.total_timesteps)
+    #new_img_state = np.concatenate((envs.past_imgs_states,new_img_state),axis=1)
 
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs,10)).to(device)
-    obs_img = torch.zeros((args.num_steps, args.num_envs,3,img_size[1],img_size[0])).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs,10+envs.traj_mode_len)).to(device)
+    obs_img = torch.zeros((args.num_steps, args.num_envs,3*1,img_size[1],img_size[0])).to(device)
     actions = torch.zeros((args.num_steps, args.num_envs) ).to(device)
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -136,7 +139,6 @@ if __name__ == "__main__":
     values = torch.zeros((args.num_steps, args.num_envs)).to(device)
 
     # TRY NOT TO MODIFY: start the game
-    global_step = 0
     start_time = time.time()
     next_obs = torch.Tensor(new_state).to(device)
     next_img_obs = torch.Tensor(new_img_state).to(device)
@@ -166,7 +168,9 @@ if __name__ == "__main__":
             # TRY NOT TO MODIFY: execute the game and log data.
             #next_obs, reward, done, info = envs.step(action.cpu().numpy())
             #next_obs, reward, done, info = [],[],[],[]
-            next_obs,reward, done, info, next_img_obs = envs.step(action.cpu().numpy())
+            next_obs,reward, done, info, next_img_obs = envs.step(action.cpu().numpy(), 
+                                                                  training_time=global_step/args.total_timesteps)
+            #next_img_obs = np.concatenate((envs.past_imgs_states,next_img_obs),axis=1)
 
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs, next_done = torch.Tensor((next_obs)).to(device), torch.Tensor(done).to(device)
@@ -196,8 +200,8 @@ if __name__ == "__main__":
             returns = advantages + values
 
         # flatten the batch
-        b_obs = obs.reshape((-1,10) )
-        b_img_obs = obs_img.reshape((-1,3,img_size[1],img_size[0]))
+        b_obs = obs.reshape((-1,10+envs.traj_mode_len) )
+        b_img_obs = obs_img.reshape((-1,3*1,img_size[1],img_size[0]))
         b_logprobs = logprobs.reshape(-1)
         b_actions = actions.reshape((-1))
         b_advantages = advantages.reshape(-1)
@@ -280,4 +284,4 @@ if __name__ == "__main__":
                 
     #envs.close()
     writer.close()
-    torch.save(agent,f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_{N_MODES}.pth')
+    torch.save(agent,f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_MODES}_cl.pth')
