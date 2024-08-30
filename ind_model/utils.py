@@ -83,7 +83,7 @@ def load_all_mode(device,modes_n = 5, return_clusterers=False):
         expert_states_,expert_actions_,expert_test_states_,expert_test_actions_ = load(type_=type_)
         
         if True:#type_!=3:
-            smoothed_dp = np.unique(np.round(expert_actions_[:,:2],2),axis=0)
+            smoothed_dp = np.unique(np.round(expert_actions_[:,:2],1),axis=0)
             clusterer = KMeans(n_clusters=modes_n,random_state=42).fit(smoothed_dp)#,n_init=10
             clusterer_labels_ = clusterer.predict(expert_actions_[:,:2])
             expert_actions_ = (np.hstack((expert_actions_,clusterer_labels_[:,None])))#.to(device)

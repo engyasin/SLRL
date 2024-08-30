@@ -27,7 +27,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SCENE_ID = 32#30:,31: ,32:
 class TrafficEnvMod(TrafficEnv):
     
-    def __init__(self, w=182, h=114, num_agents=..., max_steps=17, pixel2meter=None, make_img=False, img_size=[10,10], train = False):
+    def __init__(self, w=182, h=114, num_agents=..., max_steps=17, make_img=False, 
+                 img_size=[10,10], train = False, n_modes=20, device=None):
         
         img_file = 'img_extended_cut.png'
         self.scale = 0.00814635379575616 * 12 # fixed for scene 30-32
@@ -38,7 +39,6 @@ class TrafficEnvMod(TrafficEnv):
         self.w = int(w*self.scale)
         self.h = int(h*self.scale)
         self.bg_img = cv2.resize(bg_img,dsize=[int(self.w),int(self.h)])
-        
         self.wh = [self.w,self.h]
         
         
@@ -59,6 +59,7 @@ class TrafficEnvMod(TrafficEnv):
         self.r1 = 5
         self.r2 = 10
         self.r3 = 20
+        self.device = device
         
         self.make_img = make_img
         self.default_scale = 3
@@ -68,34 +69,27 @@ class TrafficEnvMod(TrafficEnv):
         self.train = train
 
         self.first_step = True
-        self.n_modes = 20
+        self.n_modes = n_modes
 
         self.initial_grid =  cv2.resize(bg_img,dsize=[int(self.w)*self.default_scale,
                                                       int(self.h)*self.default_scale])
         
 
         if self.first_step:
-            self.bc_models = torch.load(f'bc_agent_ind_{75}_{self.n_modes}_one_step.pth',map_location=device)
+            self.bc_models = torch.load(f'bc_agent_ind_{20}_{n_modes}_kmeans.pth',map_location=self.device)
         else:
             self.bc_models = torch.load(f'bc_agent_ind_{50}_{self.n_modes}_last_step.pth',map_location=device)
             
         self.bc_models.eval()
         
         self.reward_traj_length = 18
-        self.trained_reward = torch.load(f'reward_{self.reward_traj_length}_steps_ind_0_{self.n_modes}.pth',map_location=device).to(device)
-        self.trained_reward.eval()
         
-        _ = self.reset(num_agents=num_agents, max_steps=max_steps, pixel2meter=pixel2meter)
+        _ = self.reset(num_agents=num_agents, max_steps=max_steps)
         
-        std_factor = 2
         self.reward_models = []#Discriminator()
 
         
 
-        
-            
-        #super().__init__(w, h, num_agents, max_steps, pixel2meter, make_img, img_size)
-        
     def get_demo_data(self,scene_ids=[30],step_id=0):
         
         
@@ -216,7 +210,7 @@ class TrafficEnvMod(TrafficEnv):
         
         
         if self.make_img:
-            self.make_image()
+            self.make_image_()
             self.imgs_states = np.array([self.get_agent_image(i) for i in range(self.num_agents)])
         try:
             self.states = np.hstack((abs(self.speeds*2.5),(self.headings[:,None]%(2*np.pi)),
@@ -235,7 +229,7 @@ class TrafficEnvMod(TrafficEnv):
         return self.states.copy(),self.imgs_states
 
     
-    def reset(self, num_agents=..., max_steps=17, pixel2meter=None,training_time=1):
+    def reset(self, num_agents=..., max_steps=17, training_time=1):
         
         
         self.grid = np.zeros((self.h,self.w,3)) # 1 pixel = 1 meter
@@ -245,41 +239,27 @@ class TrafficEnvMod(TrafficEnv):
         while True:
             self.poses,self.types,self.speeds,self.acceleration,self.headings,self.trackIds = self.get_demo_data(scene_ids=[SCENE_ID], step_id=self.time - (self.time!=0))
             
-            if len(self.poses)==0:
-                self.time += 1
-            else:
-                break
+            if len(self.poses)==0:self.time += 1
+            else:break
         self.starting_poses = []
-
 
         self.speeds /= 2.5
         self.step_orders = {track:0 for track in self.trackIds}
-
         self.velocity = np.vstack((np.cos(self.headings),np.sin(self.headings))).T*self.speeds
-        
         self.old_velocity = self.velocity.copy()
-        
         self.num_agents = self.poses.shape[0]
         # state: speed,near,(type),lost
         
-        #breakpoint()
         self.zs = self.types.copy()#(np.random.rand(self.num_agents)*1).astype(int) # mode 20
         
 
         
         self.max_time = self.time+max_steps
-    
-        #self.time = start_time
-        
-        #self.max_time = 120
-        
         self.rs = 0
-    
         self.near_objs = self.update_near_objs()
         
         if self.make_img:
             self.make_image_()
-            
             self.imgs_states = np.array([self.get_agent_image(i) for i in range(self.num_agents)])
         
         self.states = np.hstack((abs(self.speeds)*2.5,(self.headings[:,None]%(2*np.pi)),self.near_objs,
@@ -293,7 +273,16 @@ class TrafficEnvMod(TrafficEnv):
 
         return [False for _ in range(self.num_agents)], self.states, self.imgs_states
     
-        return super().reset(num_agents, max_steps, pixel2meter)
+    def teleport(self):
+        pass
+
+    
+    def make_full_grid(self):
+
+        self.full_grid = np.zeros((self.h*3,self.w*3,3))
+
+        self.full_grid[self.h:self.h*2,self.w:self.w*2,:] = self.grid.copy()
+
 
     def rewards_test(self,actions,z):
         
@@ -306,13 +295,11 @@ if __name__ == '__main__':
     
     #main(x=30)
     N_modes = 20 
-    env = TrafficEnvMod(make_img=True,img_size=[20,40])
-    #model = torch.load('ppo_agent_ind_image_z.pth',map_location=torch.device('cpu'))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model_bc = torch.load(f'bc_agent_ind_{75}_{N_modes}_one_step.pth',map_location=device)
-    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_{N_modes}.pth',map_location=device)
-    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_modes}_1.pth',map_location=device)
-    #model = torch.load('ppo_agent_ind_image_d_smoothed_last_step_35.pth',map_location=device)
+    env = TrafficEnvMod(make_img=True,img_size=[20,40],device=device)
+    #model = torch.load('ppo_agent_ind_image_z.pth',map_location=torch.device('cpu'))
+    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_modes}_cl.pth',map_location=env.device)
+
     full_errors = []
     max_steps = 18
     errors_dict_ped = {i:[] for i in range(max_steps)}
@@ -320,11 +307,8 @@ if __name__ == '__main__':
     errors_dict_car = {i:[] for i in range(max_steps)}
     errors_dicts = [errors_dict_ped,errors_dict_bi,errors_dict_car]
     num_agents_minmax = []
-    while env.time<2500:#2500:
+    while env.time<2500:
         done,new_state,new_img_state = env.reset(max_steps=max_steps)
-
-        step_order = 1
-
 
         set_rule = False
         while not(done[0]):
@@ -332,19 +316,18 @@ if __name__ == '__main__':
             #new_img_state = abs(255-new_img_state)
             with torch.no_grad():
                 # rl
-                z_logits_ = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True)#.cpu().numpy()#*np.array([0.025,0])
+                #z_logits_ = model.get_action(torch.Tensor(new_state).to(env.device),torch.Tensor(new_img_state).to(env.device),best=True)
                 #z_logits = torch.nn.functional.one_hot(z_logits_,num_classes=20).to(device)
 
                 # bc
-                #action_t,z_logits = model_bc.get_action(torch.Tensor(new_state).to(device),best=True,z_logits=z_logits)
+                z_logits_ = env.bc_models.get_z(torch.Tensor(env.history[-1][:,:-env.traj_mode_len]).to(env.device)).argmax(axis=1)
+
                 #action_ = torch.hstack((action_t,torch.sigmoid(z_logits))).cpu().numpy()#*np.array([0.025,0])
 
             while True:
                 poses,types,speeds,acceleration,headings,tracks = env.get_demo_data(scene_ids=[SCENE_ID], step_id=env.time + (env.time==0))
-                if len(poses)==0:
-                    env.time += 1
-                else:
-                    break
+                if len(poses)==0: env.time += 1
+                else: break
             
 
             if set_rule :
@@ -362,7 +345,6 @@ if __name__ == '__main__':
             if all(done): continue
             new_state, new_img_state = env.update(poses,types,speeds,acceleration,headings,tracks)
             
-            #if True:
             # find errors: new_poses - old_poses
             vel = poses[[tracks.index(t) for t in env.trackIds],:]-env.poses
             num_agents_minmax.append(len(env.trackIds))
@@ -370,7 +352,7 @@ if __name__ == '__main__':
             print(f'Steps: {[env.step_orders[t] for t in env.trackIds]}, ADE: {errors.T[0].mean()}')
             for t,err,types_ in zip(env.trackIds,errors.T[0],env.types):
                 errors_dicts[types_][env.step_orders[t]].append(err)
-            step_order += 1
+
             for k,v in env.step_orders.items():
                 if k in env.trackIds:
                     env.step_orders.update({k:v+1})
@@ -379,10 +361,11 @@ if __name__ == '__main__':
 
 
         print(f'time: {env.time}')
-        
         print(f'final error: {np.mean(full_errors)}')
         print('GAME OVER')
+
     print(f'max agents: {max(num_agents_minmax)}, mean: {np.mean(num_agents_minmax)}')
+
     for t in [0,1,2]:
         print(f'type: {t}')
         for k,v in errors_dicts[t].items():

@@ -21,9 +21,6 @@ from torch.distributions.one_hot_categorical import OneHotCategoricalStraightThr
 
 from utils import load_all_mode
 
-
-
-
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
@@ -145,7 +142,6 @@ def stat_model(divide_by = 5, min_reward=-3):
     expert_states, expert_actions, expert_test_states, expert_test_actions, clusterers = load_all_mode(device,modes_n=N_modes,return_clusterers=True)
 
     clusterers, all_modes_z = load_types(modes_n=N_modes,clusteres=clusterers,test=False)
-    #clusterers, all_modes_z_test = load_types(modes_n=N_modes,clusteres=clusterers,test=True)
 
 
     full_model = []
@@ -160,7 +156,6 @@ def stat_model(divide_by = 5, min_reward=-3):
 
                 local_mode_step = all_modes_4_type[mode_step_mask].T[local_i+1]
                 full_model[type_i][step_i].append([(local_mode_step == mode_i).mean() for mode_i in range(STEPS+2)])
-
 
         # save as numpy for every type
 
@@ -191,7 +186,6 @@ def main():
 
     min_reward = -1e5
 
-    breakpoint()
     reward_model = RewardModeSequance(n_modes=N_modes, steps=STEPS).to(device)
     optimizer = optim.Adam(params=reward_model.parameters(),lr=lr)
     criterion = nn.BCEWithLogitsLoss()
@@ -257,10 +251,6 @@ def main():
                     
                 all_losses +=  loss.item()
 
-            #diffxy = (expert_actions[step*batch_size:(step+1)*batch_size,:2]-out)**2
-            #loss_x, loss_y = (diffxy.mean(axis=0))
-            #loss = loss_x + loss_y 
-    
         print(f'Epoch {epoch}: {all_losses} Loss')
 
         # eval

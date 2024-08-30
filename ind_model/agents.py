@@ -274,6 +274,7 @@ class AgentCNN_Z(nn.Module):
 
 
 class AgentCNN_D(nn.Module):
+
     def __init__(self, envs,img_size=[10,20],clusterers=[],n_modes=20):
         super().__init__()
 
@@ -331,11 +332,10 @@ class AgentCNN_D(nn.Module):
         root = self.network(x / 255.0)
         
         critic_in = torch.hstack((root,vec_state))
-        z_logits_ = torch.zeros((vec_state.shape[0],self.n_modes)).to(device)
+        z_logits = torch.zeros((vec_state.shape[0],self.n_modes)).to(device)
         for i in range(self.types_n):
-            z_logits_[obs_vec[:,8]==i] = self.actorS_z[i](critic_in[obs_vec[:,8]==i])
-        
-        z_logits = z_logits_ #+ self.modify_z(obs_vec,x)
+            z_logits[obs_vec[:,8]==i] = self.actorS_z[i](critic_in[obs_vec[:,8]==i])
+
         z_dist = Categorical(logits=z_logits)
         if best :
             return (z_dist.mode)
@@ -345,15 +345,20 @@ class AgentCNN_D(nn.Module):
     def modify_z(self,obs_vec, new_img_state):
 
         # type mask
-        #new_arr = (new_img_state.bool().sum(axis=1)>1).cpu().numpy()
-        new_arr = (new_img_state.sum(axis=1)>255).cpu().numpy()
-        all_z_labels = np.zeros((obs_vec.shape[0],self.n_modes))
-        for t in range(3):
-            type_mask = (obs_vec[:,8]==t)
-            all_z_labels[type_mask] = self.clusterers[t].predict(new_arr[type_mask].transpose(0,2,1),new_img_state[type_mask].cpu().numpy())>0
-        all_z_labels[np.logical_not(all_z_labels.any(axis=1))] += 1
-
-        return torch.log(torch.Tensor(all_z_labels).to(device=device).float())
+        mask_type = torch.zeros((1,self.n_modes)).to(device)
+        new_arr = (new_img_state.bool().sum(axis=1)>1)
+        possible_goals = torch.vstack(torch.where(new_arr)).T-torch.Tensor([0,self.center[1],self.center[0]]).to(device)
+        all_z_labels = []
+        for j,c_type in enumerate(obs_vec[:,8]):
+            clusterer = self.clusterers[c_type.int()]
+            if (possible_goals[:,0]==j).sum()==0: #if all 0s
+                all_z_labels.append(mask_type.clone())
+                continue
+            preds = torch.Tensor(clusterer.predict((possible_goals[possible_goals[:,0]==j][:,1:]).cpu())).to(device)
+            z_labels = torch.unique(preds) 
+            all_z_labels.append(torch.functional.F.one_hot(z_labels.long(),num_classes=self.n_modes).sum(axis=0))
+        mask_road = ((torch.vstack(all_z_labels)))
+        return torch.log(mask_road)
 
     def get_action_and_value(self,obs_vec, x, action=None):
         

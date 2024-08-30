@@ -31,13 +31,13 @@ class AgentCNN_Z_BC_MB(nn.Module):
         self.actor_x = nn.ModuleList([nn.Sequential(
             layer_init(nn.Linear(32,8)),
             nn.ReLU(),
-            layer_init(nn.Linear(8,2), std=1.0),
+            layer_init(nn.Linear(8,2), std=2.0),
             ) for _ in range(n_modes)])
         
         self.actor_y = nn.ModuleList([nn.Sequential(
             layer_init(nn.Linear(32,8)),
             nn.ReLU(),
-            layer_init(nn.Linear(8,2), std=1.0),
+            layer_init(nn.Linear(8,2), std=2.0),
             ) for _ in range(n_modes)])
         
         self.z_model = nn.ModuleList([nn.Sequential(
@@ -47,6 +47,7 @@ class AgentCNN_Z_BC_MB(nn.Module):
             nn.ReLU(),
             layer_init(nn.Linear(16,n_modes), std=1.0),
         ) for _ in range(self.types)])
+
         self.n_modes = n_modes
         self.center = [int(img_size[0]/2),int(img_size[1]/15)]# NOTE ratio fixed
         
@@ -66,7 +67,10 @@ class AgentCNN_Z_BC_MB(nn.Module):
         if z_logits is None:
             z_logits = self.get_z(obs_vec)
         if len(z_logits.shape)>1:
-            best_modes = z_logits.argmax(axis=1)
+            if best:
+                best_modes = z_logits.argmax(axis=1)
+            else:
+                best_modes = Categorical(logits=z_logits).mode
         else:
             best_modes = z_logits.clone() # index vector
             
@@ -172,37 +176,38 @@ def main():
     expert_states, expert_actions, expert_test_states, expert_test_actions, clusterers = load_all_mode(device,modes_n=N_modes,return_clusterers=True)
 
     batch_size = 256
-    lr = 0.0001
-    epochs = 100
+    lr = 0.0005
+    epochs = 20
     steps_per_epoch = expert_states.shape[0]//batch_size
 
             
     min_loss = 1e5
     val_split = 2000
 
-    agent = AgentClustererAll(n_modes=N_modes).to(device)
+    #agent = AgentClustererAll(n_modes=N_modes).to(device)
+    agent = AgentCNN_Z_BC_MB(None,n_modes=N_modes).to(device)
     optimizer = optim.Adam(params=agent.parameters(),lr=lr)
-    criterion = nn.MSELoss()
-    #criterion_z = nn.BCEWithLogitsLoss()
+    criterion_z = nn.BCEWithLogitsLoss()
     
     for epoch in range(epochs):
         all_losses = 0
         agent.train()
         for step in range(steps_per_epoch):
-
+            out_z = agent.get_z(expert_states[step*batch_size:(step+1)*batch_size,:10],best=False)
             z_label = torch.nn.functional.one_hot((expert_actions[step*batch_size:(step+1)*batch_size,2]).long(),
                                                   num_classes=agent.n_modes)
 
-            out,_ = agent.get_action(expert_states[step*batch_size:(step+1)*batch_size,:10],z_logits=z_label.argmax(axis=1).clone(),best=False)
+            out,_ = agent.get_action(expert_states[step*batch_size:(step+1)*batch_size,:10],z_logits=z_label.clone(),best=False)
 
             #diffxy = (expert_actions[step*batch_size:(step+1)*batch_size,:2]-out)**2
             #loss_x, loss_y = (diffxy.mean(axis=0))
             #loss = loss_x + loss_y 
             loss = torch.sqrt(((expert_actions[step*batch_size:(step+1)*batch_size,:2]-out)**2).sum(axis=1)).mean()
+            loss_z = criterion_z(out_z,z_label.float())
 
             optimizer.zero_grad()
                 
-            (loss).backward()
+            (loss+loss_z*0.5).backward()
                 
             optimizer.step()
                 
@@ -213,29 +218,28 @@ def main():
         # eval
         agent.eval()
         with torch.no_grad():
-            z_label = torch.nn.functional.one_hot((expert_test_actions[:val_split,2]).long(),
+            z_label = torch.nn.functional.one_hot((expert_test_actions[::2,2]).long(),
                                                   num_classes=agent.n_modes)
-            out,best_modes = agent.get_action(expert_test_states[:val_split,:10],best=True, z_logits=z_label.argmax(axis=1))
-            loss_x, loss_y = abs(((expert_test_actions[:val_split,:2]-out))).mean(axis=0)
-            loss_item = loss_x.item() + loss_y.item()
+            out,_  = agent.get_action(expert_test_states[::2,:10],best=True)
+            loss_ = torch.sqrt(((expert_test_actions[::2,:2]-out)**2).sum(axis=1))
+            loss = loss_.mean()
             #loss_z = ((out_z.argmax(axis=1)) == (expert_test_actions[:,2])).sum()/expert_test_actions.shape[0]
-
-        print(f'Eval Lossx: {loss_x.item()}, Lossy: {loss_y.item()}')
-        if loss_item < min_loss:
-            min_loss = loss_item
+        print(f'Eval Loss: {loss.item()} ')
+        if min_loss > loss.item():
+            min_loss = loss.item()
             torch.save(agent,f'bc_agent_ind_{epochs}_{agent.n_modes}_kmeans.pth')
             print('Model saved')
         
     # test
     agent.eval()
     with torch.no_grad():
-        z_label = torch.nn.functional.one_hot((expert_test_actions[val_split:,2]).long(),
-                                                num_classes=agent.n_modes)
-        out,best_modes = agent.get_action(expert_test_states[val_split:,:10],best=True, z_logits=z_label.argmax(axis=1))
-        loss_ = torch.sqrt(((expert_test_actions[val_split:,:2]-out)**2).sum(axis=1))
+        out,out_z = agent.get_action(expert_test_states[1::2,:10],best=True)
+        loss_ = torch.sqrt(((expert_test_actions[1::2,:2]-out)**2).sum(axis=1))
         loss = loss_.mean()
+        loss_z = ((out_z.argmax(axis=1)) == (expert_test_actions[1::2,2])).sum()/expert_test_actions[1::2,:].shape[0]
 
     print(f'Test Loss: {loss.item()} ')
+    print(f'Test Z Acc: {loss_z} ')
             
     torch.save(agent,f'bc_agent_ind_{epochs}_{agent.n_modes}_kmeans_last.pth')
 
