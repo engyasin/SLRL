@@ -7,13 +7,11 @@ import cv2
 import torch
 from torch.distributions.normal import Normal
 
-from bc import AgentClustererAll,Agent_BC_MB,AgentCNN_Z_BC_MB
-
 
 import os
 
-from agents import AgentCNN_D as Agent
-from agents import Discriminator,made_up_clusterer
+from agents import RLAgent 
+from agents import SLAgent 
 
 from make_roads import get_random_scene
 from utils import load,load_all_mode
@@ -62,7 +60,6 @@ class TrafficEnv():
         self.n_modes = n_modes
         self.reward_traj_length = 18
 
-        #self.bc_models = torch.load(f'bc_agent_ind_{75}_{n_modes}_one_step.pth',map_location=self.device)
         self.bc_models = torch.load(f'bc_agent_ind_{20}_{n_modes}_kmeans.pth',map_location=self.device)
 
         self.bc_models.eval()
@@ -177,8 +174,8 @@ class TrafficEnv():
         revert_self = np.logical_not(np.eye(self.num_agents).astype(bool))
         types_mat_1 = (self.types>1)[:,None]
 
-        rewards = -0.5*((((distances<2.0)*revert_self).sum(axis=1)*abs(self.speeds.T[0]))[:,None])*self.fixed_reward_factor
-        rewards = -1*((((distances<1.0)*revert_self).sum(axis=1)*abs(self.speeds.T[0]))[:,None])*self.fixed_reward_factor
+        rewards = -0.25*((((distances<2.0)*revert_self).sum(axis=1))[:,None])*self.fixed_reward_factor
+        rewards = -0.9*((((distances<1.0)*revert_self).sum(axis=1))[:,None])*self.fixed_reward_factor
         rewards = -1.5*((((distances<0.4)*revert_self).sum(axis=1)*abs(self.speeds.T[0]))[:,None])*self.fixed_reward_factor
         self.collsions += (((distances<0.3)*revert_self).sum(axis=1)[:,None]).sum()/2
 
@@ -193,12 +190,12 @@ class TrafficEnv():
         rewards[types_mat_1.T[0]] -= (5*np.logical_not(self.road[nonvru_poses[1],nonvru_poses[0],1].astype(bool)))[:,None]*self.fixed_reward_factor
         
         #### speed should be big for cars and none zero of vrus NOTE (added) (sligtly encourge high speeds)
-        rewards[(self.types==0)] += (0.05*((abs(self.speeds.T[0])[(self.types==0)])>0.5))[:,None] # pedestrains
-        rewards[(self.types==1)] += (0.05*((abs(self.speeds.T[0])[(self.types==1)])>0.9))[:,None] # bikes
-        rewards[(self.types==2)] += (0.05*((abs(self.speeds.T[0])[(self.types==2)])>2))[:,None] # cars
+        rewards[(self.types==0)] -= (0.2*((abs(self.speeds.T[0])[(self.types==0)])<0.5))[:,None] # pedestrains
+        rewards[(self.types==1)] -= (0.2*((abs(self.speeds.T[0])[(self.types==1)])<0.9))[:,None] # bikes
+        rewards[(self.types==2)] -= (0.2*((abs(self.speeds.T[0])[(self.types==2)])<2))[:,None] # cars
 
         #### Relastic Trajs
-        if self.time>0:
+        if self.time>0 :
             trajs = np.vstack(self.history_z).T[:,-min(self.time+1,self.traj_mode_len):]
             for type_ii,traj,act_d,n_i in zip(self.types,trajs,actions_d,range(self.num_agents)):
                 final_reward = np.zeros(self.n_modes)
@@ -247,7 +244,7 @@ class TrafficEnv():
             lane_width = 2 
         
         self.grid = np.zeros((self.h,self.w,3)) # 1 pixel = 1 meter
-        self.full_grid = np.zeros((self.h*3,self.w*3,3))
+        self.full_grid = np.zeros((self.h*3,self.w*3,3))+128
 
         self.road,self.sidewalk,self.heading_img, self.ports = get_random_scene(self.w,self.h,lane_width=lane_width)
         
@@ -325,11 +322,14 @@ class TrafficEnv():
     def get_agent_image(self,i):
         
 
-        center = self.poses[i] + np.array([self.w,self.h])
+        center = self.poses[i] + np.array([self.w,self.h])*abs(self.train-1)
 
         heading = self.headings[i]
         R_mat = cv2.getRotationMatrix2D(center,heading*180/np.pi,1)
-        img = cv2.warpAffine(self.full_grid, R_mat, (self.w*3,self.h*3), flags=cv2.INTER_LINEAR,borderValue=1)
+        if self.train:
+            img = cv2.warpAffine(self.grid, R_mat, (int(self.w*1.5),int(self.h*1.5)), flags=cv2.INTER_LINEAR,borderValue=1)
+        else:
+            img = cv2.warpAffine(self.full_grid, R_mat, (self.w*3,self.h*3), flags=cv2.INTER_LINEAR,borderValue=1)
 
         out = img[max(int(center[1]-self.img_size[0]/2),0):int(center[1]+self.img_size[0]/2),
                   max(int(center[0]-self.img_size[1]*0.2),0):int(center[0]+self.img_size[1]*0.8),:].T
@@ -339,7 +339,7 @@ class TrafficEnv():
     
     def make_full_grid(self):
 
-        self.full_grid = np.zeros((self.h*3,self.w*3,3))
+
         cd_ = self.ports[2] -self.ports[3]
         ba_ = self.ports[1] -self.ports[0]
 
@@ -373,8 +373,12 @@ class TrafficEnv():
 
             elif self.types[i] == 0:
                 #pedestrains
-                self.grid = cv2.circle(self.grid,self.poses[i].astype(int)*scale,3,
-                                       color=colors[self.types[i].astype(int)],thickness=-1)
+
+                p1 = ((self.poses[i]-np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.0)*scale).astype(int)
+                p2 = ((self.poses[i]+np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.0)*scale).astype(int)
+                self.grid = cv2.arrowedLine(self.grid,p1,p2,
+                                    color=colors[self.types[i].astype(int)],thickness=2,tipLength=0.5)
+
             else:
                 p1 = (self.poses[i]-np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*2) # 4=2+1 meters car length
                 p2 = (self.poses[i]+np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*2)
@@ -385,10 +389,8 @@ class TrafficEnv():
                 p2a = ((p2+np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*0.7)*scale)
                 p2b = ((p2-np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*0.7)*scale)
 
-                #self.grid = cv2.rectangle(self.grid,p1.astype(int)*scale,p2.astype(int)*scale,color=colors[self.types[i].astype(int)],thickness=-1)
 
                 points = np.array([p1a,p2a,p2b,p1b]).astype(np.int32)
-
 
                 self.grid = cv2.fillPoly(self.grid,pts=[points],
                                           color=colors[self.types[i].astype(int)])
@@ -409,7 +411,7 @@ def main():
     N_MODES=20
     
     env = TrafficEnv(make_img=True,num_agents=64,img_size=[20,40],n_modes=N_MODES,train=False)
-    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_MODES}_cl.pth',map_location=env.device)
+    model = torch.load(f'ppo_agent_ind_with_reward_{N_MODES}_cl_not_learned.pth',map_location=env.device)
 
     ########################### LOOP
 
@@ -420,10 +422,10 @@ def main():
         while sum(done)==0:
             with torch.no_grad():
                 action = model.get_action(torch.Tensor(new_state).to(device=env.device),
-                                          torch.Tensor(new_img_state).to(device=env.device),best=False).cpu().numpy()
+                                          torch.Tensor(new_img_state).to(device=env.device),best=True).cpu().numpy()
             new_state, rewards, done,info,new_img_state = env.step(action) # empty input to get bc baseline
             all_rewards += rewards
-            env.make_image_()
+            #env.make_image_()
             env.render()
             if False:
                 plt.imshow(env.full_grid)

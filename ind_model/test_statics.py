@@ -2,8 +2,8 @@ from numpy.random.mtrand import randint as randint
 
 from utils import *
 from matplotlib import pyplot as plt
-from agents import AgentCNN_D as Agent
-from bc import AgentCNN_Z_BC_MB
+from agents import RLAgent as Agent
+from agents import SLAgent
 
 import pandas as pd
 import numpy as np

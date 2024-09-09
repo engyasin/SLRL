@@ -4,8 +4,8 @@ import numpy as np
 from utils import *
 from matplotlib import pyplot as plt
 
-from agents import AgentCNN_D as Agent
-from bc import AgentCNN_Z_BC_MB
+from agents import RLAgent as Agent
+from agents import SLAgent
 
 from sklearn.cluster import KMeans
 
@@ -13,7 +13,6 @@ import glob,os
 import os
 import cv2
 
-from agents import Discriminator
 from train_reward_offline import RewardModeSequance,LongTermDiscriminator
 from utils import load_all_mode
 

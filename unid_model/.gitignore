@@ -1,6 +1,6 @@
 *.pth
-*.npy
 *.avi
+*.npy
 runs/
 unids/
 *.png
@@ -8,6 +8,7 @@ unids/
 !bc_agent_unid_35_20_one_step.pth
 !output_unid.mp4
 !ppo_agent_unid_image_d_smoothed_first_step_new.pth
+!unid_rewards_logprob.npy
 __pycache__/
 vis.py
-*docx
+*.docx

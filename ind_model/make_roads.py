@@ -3,8 +3,6 @@ import numpy as np
 from utils import *
 #from matplotlib import pyplot as plt
 
-
-
 import glob,os
 import os
 import cv2
@@ -29,7 +27,7 @@ def get_random_scene(w, h, lane_width = 2):
     cv2.line(template_img,np.array([a[1],a[0]-half_lane]),np.array([b[1],b[0]-half_lane]),color=[255,255,255],thickness=half_lane+1)
 
     heading_img[template_img>0] = np.arctan2(a[0]-b[0],a[1]-b[1])#+np.pi#/2#y/x (for reverse without pi)
-    template_img =  np.zeros((h,w,3))
+    template_img = np.zeros((h,w,3))
     cv2.line(template_img,np.array([a[1],a[0]+half_lane]),np.array([b[1],b[0]+half_lane]),color=[255,255,255],thickness=half_lane+1)
     heading_img[template_img>0] = np.arctan2(a[0]-b[0],a[1]-b[1])+np.pi#/2#y/x (for reverse without pi)
     

@@ -1,5 +1,4 @@
 
-
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
@@ -133,9 +132,17 @@ def load_types(modes_n = 20, clusteres = [],test=False):
     return all_clusterers, all_trajs_modes
 
 
-def stat_model(divide_by = 5, min_reward=-3):
 
-    N_modes = 20
+    
+
+def stat_model(divide_by = 5, min_reward=-3,N_modes = 20):
+
+
+    if os.path.isfile('ind_rewards_logprob.npy'):
+        full_model = np.load('ind_rewards_logprob.npy')
+        return np.clip(full_model/divide_by,min_reward,0)
+
+
     STEPS = 18
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -288,7 +295,10 @@ def main():
 
 
 if __name__ == "__main__":
-    stat_model()
+
+    results = stat_model(divide_by = 1, min_reward=-1000,N_modes = 20)
+
+    np.save('ind_rewards_logprob.npy',results)
 
 
 

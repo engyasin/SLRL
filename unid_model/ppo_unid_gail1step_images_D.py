@@ -41,11 +41,11 @@ def parse_args():
     # Algorithm specific arguments
     parser.add_argument("--env-id", type=str, default="unid_rail_image",
         help="the id of the environment")
-    parser.add_argument("--total-timesteps", type=int, default=15000000,
+    parser.add_argument("--total-timesteps", type=int, default=6000000,
         help="total timesteps of the experiments")
-    parser.add_argument("--learning-rate", type=float, default=2.0e-3,
+    parser.add_argument("--learning-rate", type=float, default=3.0e-4,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=64,
+    parser.add_argument("--num-envs", type=int, default=32,
         help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=32,
         help="the number of steps to run in each environment per policy rollout")
@@ -65,7 +65,7 @@ def parse_args():
         help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
-    parser.add_argument("--ent-coef", type=float, default=0.01,
+    parser.add_argument("--ent-coef", type=float, default=0.02,
         help="coefficient of the entropy")
     parser.add_argument("--vf-coef", type=float, default=0.5,
         help="coefficient of the value function")
@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     
-    
+    envs.set_training_progress(training_progress=0)
     done,new_state,new_img_state = envs.reset(num_agents=args.num_envs,max_steps=args.num_steps)
 
 
@@ -132,6 +132,7 @@ if __name__ == "__main__":
     num_updates = args.total_timesteps // args.batch_size
 
     for update in range(1, num_updates + 1):
+        envs.set_training_progress(training_progress=global_step/args.total_timesteps)
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (update - 1.0) / num_updates
@@ -261,9 +262,6 @@ if __name__ == "__main__":
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step/(time.time()-start_time)), global_step)
         
-        # check if one mode is detected:
-        # TODO evaluate on validation
-                
     #envs.close()
     writer.close()
-    torch.save(agent,f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_v3.pth')
+    torch.save(agent,f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_v3_no_learned_reward.pth')

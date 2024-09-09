@@ -47,7 +47,7 @@ class TrafficEnv():
         self.device = device
         
         self.fixed_reward_factor = 1
-        self.random_scaling = random_scaling
+        self.training_progress = 1
         self.make_img = make_img
         self.imgs_states = None
         self.img_size = img_size
@@ -57,7 +57,7 @@ class TrafficEnv():
         self.reward_traj_length = 18
         self.bg_img = cv2.imread('background_img.png') 
 
-        self.full_reward_model = stat_model(divide_by=8,min_reward=-1)#4,-2
+        self.full_reward_model = stat_model(divide_by=4,min_reward=-2)#4,-2
         
         _ = self.reset(num_agents=num_agents, max_steps=max_steps)
 
@@ -115,13 +115,13 @@ class TrafficEnv():
             if n_nonvru:
                 self.poses[out_nonvru] = np.array(random.choices(self.ports[5:],k=n_nonvru)) + ((np.random.rand(n_nonvru,2)*6)-3).astype(int)
                 self.starting_port[out_nonvru] = np.linalg.norm((self.poses[out_nonvru] - self.ports[:,None,:]).reshape(-1,2),axis=1).reshape(len(self.ports),-1).argmin(axis=0)   
-                rewards_goal -= (1)*out_nonvru[:,None]*(self.time<14)*10
+                rewards_goal -= (1)*out_nonvru[:,None]*(self.time<14+4)*30
                 self.headings[out_nonvru*(self.starting_port==5)] = -1*np.pi/4
                 self.headings[out_nonvru*(self.starting_port==6)] = 3*np.pi/4
             if n_vru:
                 self.poses[out_vru] = np.array(random.choices(self.ports[:5],k=n_vru)) + ((np.random.rand(n_vru,2)*6)-3).astype(int)
                 self.starting_port[out_vru] = np.linalg.norm((self.poses[out_vru] - self.ports[:,None,:]).reshape(-1,2),axis=1).reshape(len(self.ports),-1).argmin(axis=0)  
-                rewards_goal -= (1)**out_vru[:,None]*(self.time<12)*10
+                rewards_goal -= (1)**out_vru[:,None]*(self.time<12+3)*30
 
         self.acceleration = ((self.speeds*2.5)-(self.history[-1][:,0:1]))*2.5 #NOTE
         self.old_velocity = self.velocity.copy()
@@ -170,12 +170,10 @@ class TrafficEnv():
         
         ############## reward speeds
 
-        rewards[(self.types==0)] -= (0.5*((abs(self.speeds.T[0])[(self.types==0)])<0.3))[:,None]*self.fixed_reward_factor
-        rewards[(self.types==1)] -= (0.5*((abs(self.speeds.T[0])[(self.types==1)])<0.5))[:,None]*self.fixed_reward_factor # bikes
-        rewards[(self.types==2)] -= (0.5*((abs(self.speeds.T[0])[(self.types==2)])<1))[:,None]*self.fixed_reward_factor # cars
+        rewards += np.log(np.clip((3-self.types)*abs(self.speeds.T[0]),0.1,1))[:,None]*self.fixed_reward_factor
         
         ############## Relastic Trajs
-        if self.time>0:
+        if self.time>0 :
             trajs = np.vstack(self.history_z).T[:,-min(self.time+1,self.traj_mode_len):]
             for type_ii,traj,act_d,n_i in zip(self.types,trajs,actions_d,range(self.num_agents)):
                 final_reward = np.zeros(self.n_modes)
@@ -186,13 +184,17 @@ class TrafficEnv():
 
         return rewards
 
+    def set_training_progress(self,training_progress):
+        self.training_progress = training_progress
         
     def reset(self, num_agents = 20 + np.random.randint(15),max_steps=17):
 
-        random_scale = int(np.random.choice([1,0,-1])*self.random_scaling+2)#1.68
+        random_scale = (3*(1-self.training_progress)+2)#1.68
+        #random_scale = (np.random.choice([1,0,-1])*flag+2)#1.68
         h,w,_ = self.bg_img.shape
-        bg_img = cv2.resize(self.bg_img,dsize=[int(w*random_scale),int(h*random_scale)])
+        bg_img = cv2.resize(self.bg_img,dsize=np.round([w*random_scale,h*random_scale]).astype(int))
         self.road,self.sidewalk = bg_img.copy(),bg_img.copy()
+        self.w,self.h = bg_img.shape[1],bg_img.shape[0]
 
         # make fixed grid
         self.initial_grid = cv2.resize((self.road+self.sidewalk),
@@ -200,8 +202,8 @@ class TrafficEnv():
                                        interpolation=cv2.INTER_LINEAR)
 
         # [left,left,right,right,up, down]
-        self.ports = np.array([[139,52],[113,73],[115,117],[127,106],[159,70],[82,124],[163,46]])*random_scale
-        self.w,self.h = bg_img.shape[1],bg_img.shape[0]
+        self.ports = np.round(np.array([[139,52],[113,73],[115,117],[127,106],[159,70],[82,124],[163,46]])*random_scale)
+
         
         self.grid = np.zeros((self.h,self.w,3)) # 1 pixel = 1 meter
         
@@ -278,34 +280,35 @@ class TrafficEnv():
         
     def make_image_(self):
         scale = self.show_scale
+        agents_draw_scale = 1
         self.grid = self.initial_grid.copy()
         colors = np.array([[0,255.0,0],[255.0,0,0],[0,0,255.0]])
 
         for i  in range(self.num_agents):
             if self.types[i]==1:
                 # bicycle: length 3m
-                p1 = ((self.poses[i]-np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.5)*scale).astype(int)
-                p2 = ((self.poses[i]+np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.5)*scale).astype(int)
+                p1 = ((self.poses[i]-np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.5*agents_draw_scale)*scale).astype(int)
+                p2 = ((self.poses[i]+np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.5*agents_draw_scale)*scale).astype(int)
                 self.grid = cv2.arrowedLine(self.grid,p1,p2,
-                                    color=colors[self.types[i].astype(int)],thickness=2)      
+                                    color=colors[self.types[i].astype(int)],thickness=2,tipLength=0.5)      
 
             elif self.types[i] == 0:
                 #pedestrains
                 #self.grid = cv2.circle(self.grid,(self.poses[i]*scale).astype(int),int(self.types[i]/2)+scale+1,
                 #                       color=colors[self.types[i].astype(int)],thickness=-1)
-                p1 = ((self.poses[i]-np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.0)*scale).astype(int)
-                p2 = ((self.poses[i]+np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.0)*scale).astype(int)
+                p1 = ((self.poses[i]-np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.0*agents_draw_scale)*scale).astype(int)
+                p2 = ((self.poses[i]+np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*1.0*agents_draw_scale)*scale).astype(int)
                 self.grid = cv2.arrowedLine(self.grid,p1,p2,
                                     color=colors[self.types[i].astype(int)],thickness=2,tipLength=0.5)    
             else:
                 # cars
-                p1 = (self.poses[i]-np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*2) # 4=2+2 meters car length
-                p2 = (self.poses[i]+np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*2)
+                p1 = (self.poses[i]-np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*2*agents_draw_scale) # 4=2+2 meters car length
+                p2 = (self.poses[i]+np.array([np.cos(self.headings[i]),np.sin(self.headings[i])])*2*agents_draw_scale)
 
-                p1a = ((p1+np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*1)*scale) # 2=1+1 meters car width
-                p1b = ((p1-np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*1)*scale)
-                p2a = ((p2+np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*0.7)*scale)
-                p2b = ((p2-np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*0.7)*scale)
+                p1a = ((p1+np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*1*agents_draw_scale)*scale) # 2=1+1 meters car width
+                p1b = ((p1-np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*1*agents_draw_scale)*scale)
+                p2a = ((p2+np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*0.3*agents_draw_scale)*scale)
+                p2b = ((p2-np.array([np.cos(self.headings[i]+(np.pi/2)),np.sin(self.headings[i]+(np.pi/2))])*0.3*agents_draw_scale)*scale)
 
                 points = np.array([p1a,p2a,p2b,p1b]).astype(np.int32)
 
@@ -322,18 +325,19 @@ class TrafficEnv():
  
 def main():
     N_MODES=20
-    env = TrafficEnv(make_img=True,img_size=[20,40],n_modes=N_MODES,random_scaling=False,first_step=True)#[12,20]
+    env = TrafficEnv(make_img=True,img_size=[20,40],n_modes=N_MODES,random_scaling=True,first_step=True)#[12,20]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][env.first_step]}_v3_0.pth',map_location=device)
+    model = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][env.first_step]}_v3.pth',map_location=device)
 
     for scene in range(10):
         all_rewards = 0
-        done,new_state,new_img_state = env.reset(num_agents=4*(scene+1),max_steps=16*8)
+        done,new_state,new_img_state = env.reset(num_agents=4*(scene+1),max_steps=16*8)#
+        #env.set_training_progress(0)
         while not(done[0]):
             with torch.no_grad():
                 action = model.get_action(torch.Tensor(new_state).to(device=device),torch.Tensor(new_img_state).to(device=device),best=True).cpu().numpy()
 
-            new_state, rewards, done,info,new_img_state = env.step()
+            new_state, rewards, done,info,new_img_state = env.step(action)
             env.render()
             if False:
                 #plt.figure(figsize=(10,10))
@@ -344,7 +348,8 @@ def main():
                 plt.show()
             cv2.waitKey(10)
             all_rewards += rewards.sum()
-        print(all_rewards)
+        print(all_rewards/env.num_agents)
+        print(info[0]['episode']['collisions'])
         print('GAME OVER')
 
 

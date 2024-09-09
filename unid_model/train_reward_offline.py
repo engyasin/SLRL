@@ -85,6 +85,11 @@ def load_types(modes_n = 20, clusteres = [],test=False):
 def stat_model(divide_by = 5, min_reward=-3):
 
     N_modes = 20
+
+    if os.path.isfile('unid_rewards_logprob.npy'):
+        full_model = np.load('unid_rewards_logprob.npy')
+        return np.clip(full_model/divide_by,min_reward,0)
+
     STEPS = 18
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -117,9 +122,10 @@ def stat_model(divide_by = 5, min_reward=-3):
 
 
 if __name__ == "__main__":
-    res = stat_model()
 
+    results = stat_model(divide_by = 1, min_reward=-1000)
 
+    np.save('unid_rewards_logprob.npy',results)
 
 
 

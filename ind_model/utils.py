@@ -8,7 +8,7 @@ import cv2
 import torch
 from torch.distributions.normal import Normal
 
-from agents import Agent_RL
+from agents import RLAgent
 
 #from sklearn.cluster import KMeans
 

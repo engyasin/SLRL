@@ -6,7 +6,6 @@ import random
 import time
 from distutils.util import strtobool
 
-from bc import AgentCNN_Z_BC_MB
 #import gym
 import numpy as np
 import torch
@@ -17,9 +16,9 @@ from torch.utils.tensorboard import SummaryWriter
 
 #from gail import girdworld_gail, Reward
 from trafficenv_D import TrafficEnv
-from agents import AgentCNN_D as Agent
+from agents import RLAgent as Agent
+from agents import SLAgent
 from utils import load,load_all_mode
-from bc import AgentClustererAll,Agent_BC_MB
 from train_reward_offline import RewardModeSequance, LongTermDiscriminator
 
 
@@ -34,7 +33,7 @@ def parse_args():
         help="if toggled, `torch.backends.cudnn.deterministic=False`")
     parser.add_argument("--cuda", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="if toggled, cuda will be enabled by default")
-    parser.add_argument("--wandb-project-name", type=str, default="cleanRL",
+    parser.add_argument("--wandb-project-name", type=str, default="PPO_IND",
         help="the wandb's project name")
     parser.add_argument("--wandb-entity", type=str, default=None,
         help="the entity (team) of wandb's project")
@@ -44,7 +43,7 @@ def parse_args():
     # Algorithm specific arguments
     parser.add_argument("--env-id", type=str, default="ind_gail_image",
         help="the id of the environment")
-    parser.add_argument("--total-timesteps", type=int, default=16000000,
+    parser.add_argument("--total-timesteps", type=int, default=10000000,
         help="total timesteps of the experiments")
     parser.add_argument("--learning-rate", type=float, default=5.0e-4,
         help="the learning rate of the optimizer")
@@ -108,7 +107,6 @@ if __name__ == "__main__":
     #val_in_set, val_out_set, train_discs = load_val(device)
     # env setup
     #expert_states,expert_actions,expert_test_states,expert_test_actions,clusterers = load_all_mode(device,modes_n = N_MODES, return_clusterers=True)
-    
 
     envs = TrafficEnv(num_agents=args.num_envs,make_img=True,img_size=img_size,n_modes=N_MODES,train=True)
 
@@ -277,4 +275,4 @@ if __name__ == "__main__":
         
 
     writer.close()
-    torch.save(agent,f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_MODES}_cl.pth')
+    torch.save(agent,f'ppo_agent_ind_with_reward_{N_MODES}_cl_not_learned.pth')
