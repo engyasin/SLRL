@@ -37,7 +37,7 @@ class AgentCNN_D(nn.Module):
         )
         
         self.vector_state = nn.Sequential(
-            layer_init(nn.Linear(10,16)),
+            layer_init(nn.Linear(10+envs.traj_mode_len,16)),
             nn.ReLU(),
         )
         
@@ -47,8 +47,6 @@ class AgentCNN_D(nn.Module):
                 nn.ReLU(),
                 layer_init(nn.Linear(32,self.n_modes), std=1.0),
                 ) for _ in range(self.types_n)])
-        
-
         
         self.critic = nn.Sequential(
             layer_init(nn.Linear(16+16,8)),
@@ -79,7 +77,6 @@ class AgentCNN_D(nn.Module):
             z_logits_[obs_vec[:,8]==i] = self.actorS_z[i](critic_in[obs_vec[:,8]==i])
         
         z_dist = Categorical(logits=z_logits_)
-
         if best :
             return (z_dist.mode)
         return  z_dist.sample()

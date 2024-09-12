@@ -73,7 +73,7 @@ def load_all_mode(device,modes_n = 5, return_clusterers=False):
         expert_states_,expert_actions_,expert_test_states_,expert_test_actions_ = load(type_=type_)
         
         # NOTE degree of smoothing: first/last point
-        smoothed_dp = np.unique(np.round(expert_actions_[:,:2],3),axis=0)
+        smoothed_dp = np.unique(np.round(expert_actions_[:,:2],2),axis=0)
 
         clusterer = KMeans(n_clusters=modes_n,random_state=42).fit(smoothed_dp)#,n_init=10 # NOTE first step
         #clusterer = DBSCAN(eps=2,min_samples=5).fit(smoothed_dp)#,n_init=10 # NOTE first step

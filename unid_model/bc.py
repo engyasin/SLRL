@@ -31,16 +31,17 @@ class AgentCNN_Z_BC_MB(nn.Module):
             nn.ReLU(),
         )
         self.actor_x = nn.ModuleList([nn.Sequential(
-            layer_init(nn.Linear(32,8)),
-            nn.ReLU(),
-            layer_init(nn.Linear(8,2), std=1.0),
-            ) for _ in range(n_modes)])
+                layer_init(nn.Linear(32,8)),
+                nn.ReLU(),
+                layer_init(nn.Linear(8,2), std=2.0),
+                ) for _ in range(n_modes)])# for _ in range(self.types)])
         
         self.actor_y = nn.ModuleList([nn.Sequential(
-            layer_init(nn.Linear(32,8)),
-            nn.ReLU(),
-            layer_init(nn.Linear(8,2), std=1.0),
-            ) for _ in range(n_modes)])
+                layer_init(nn.Linear(32,8)),
+                nn.ReLU(),
+                layer_init(nn.Linear(8,2), std=2.0),
+                ) for _ in range(n_modes)]
+            )# for _ in range(self.types)])
         
         self.z_model = nn.ModuleList([nn.Sequential(
             layer_init(nn.Linear(10,32)),
@@ -68,7 +69,11 @@ class AgentCNN_Z_BC_MB(nn.Module):
         if z_logits is None:
             z_logits = self.get_z(obs_vec)
         if len(z_logits.shape)>1:
-            best_modes = Categorical(logits=z_logits).sample()
+            best_modes_prob = Categorical(logits=z_logits)
+            if best:
+                best_modes = best_modes_prob.mode
+            else:
+                best_modes = best_modes_prob.mode
             #best_modes = z_logits.argmax(axis=1)
         else:
             best_modes = z_logits.clone() # index vector
@@ -77,10 +82,12 @@ class AgentCNN_Z_BC_MB(nn.Module):
         vec_state = self.vector_state_root(obs_vec)
 
         for mode in range(self.n_modes):
+            #for type_ in range(self.types):
+            #    mask = (obs_vec[:,8]==type_)*(best_modes==mode)
             mask = (best_modes==mode)
             logits_x = self.actor_x[mode](vec_state[mask])
             logits_y = self.actor_y[mode](vec_state[mask])
-        
+    
             loc = torch.hstack((logits_x[:,:1],logits_y[:,:1]))
             scale = torch.hstack((logits_x[:,1:],logits_y[:,1:]))
             probs_xy = Normal(loc=loc,scale=torch.relu(scale)+1e-8)
@@ -99,12 +106,11 @@ def main():
     N_modes = 20
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     expert_states, expert_actions, expert_test_states, expert_test_actions, clusterers = load_all_mode(device,modes_n=N_modes,return_clusterers=True)
-    batch_size = 512
-    lr = 0.0001
-    epochs = 100
+    batch_size = 256
+    lr = 0.001
+    epochs = 40
     steps_per_epoch = expert_states.shape[0]//batch_size
 
-    val_split = 20000
     min_loss = 1e5
     agent = AgentCNN_Z_BC_MB(None,n_modes=N_modes).to(device)
     optimizer = optim.Adam(params=agent.parameters(),lr=lr)
@@ -114,17 +120,17 @@ def main():
         all_losses = 0
         agent.train()
         for step in range(steps_per_epoch):
-            #out_z = agent.get_z(expert_states[step*batch_size:(step+1)*batch_size,:10],best=False)
+            out_z = agent.get_z(expert_states[step*batch_size:(step+1)*batch_size,:10],best=False)
             z_label = torch.nn.functional.one_hot((expert_actions[step*batch_size:(step+1)*batch_size,2]).long(),
                                                   num_classes=agent.n_modes)
             out,_ = agent.get_action(expert_states[step*batch_size:(step+1)*batch_size,:10],z_logits=z_label.clone(),best=False)
             loss = torch.sqrt(((expert_actions[step*batch_size:(step+1)*batch_size,:2]-out)**2).sum(axis=1)).mean()
 
-            #loss_z = criterion_z(out_z,z_label.float())
+            loss_z = criterion_z(out_z,z_label.float())
 
             optimizer.zero_grad()
                 
-            (loss).backward()
+            (loss+loss_z*0.5).backward()
                 
             optimizer.step()
                 
@@ -134,8 +140,10 @@ def main():
 
         agent.eval()
         with torch.no_grad():
-            out,_  = agent.get_action(expert_test_states[:val_split,:10],best=True)
-            loss_ = torch.sqrt(((expert_test_actions[:val_split,:2]-out)**2).sum(axis=1))
+            z_label = torch.nn.functional.one_hot((expert_test_actions[::2,2]).long(),
+                                                  num_classes=agent.n_modes)
+            out,_  = agent.get_action(expert_test_states[::2,:10],z_logits=None,best=True)
+            loss_ = torch.sqrt(((expert_test_actions[::2,:2]-out)**2).sum(axis=1))
             loss = loss_.mean()
             #loss_z = ((out_z.argmax(axis=1)) == (expert_test_actions[:,2])).sum()/expert_test_actions.shape[0]
         print(f'Eval Loss: {loss.item()} ')
@@ -143,15 +151,20 @@ def main():
             min_loss = loss.item()
             torch.save(agent,f'bc_agent_unid_{epochs}_{agent.n_modes}_smoothed_one_step_new.pth')
             print('Model saved')
+
+    #agent = torch.load(f'bc_agent_unid_{35}_{agent.n_modes}_one_step.pth',map_location=device)
+    #agent = torch.load(f'bc_agent_unid_{25}_{agent.n_modes}_smoothed_one_step_new.pth',map_location=device)
     agent.eval()
     with torch.no_grad():
-        out,out_z = agent.get_action(expert_test_states[val_split:,:10],best=True)
-        loss_ = torch.sqrt(((expert_test_actions[val_split:,:2]-out)**2).sum(axis=1))
+        z_label = torch.nn.functional.one_hot((expert_test_actions[1::2,2]).long(),
+                                                  num_classes=agent.n_modes)
+        out,out_z = agent.get_action(expert_test_states[1::2,:10],z_logits=None,best=True)
+        loss_ = torch.sqrt(((expert_test_actions[1::2,:2]-out)**2).sum(axis=1))
         loss = loss_.mean()
-        #loss_z = ((out_z.argmax(axis=1)) == (expert_test_actions[:,2])).sum()/expert_test_actions.shape[0]
+        loss_z = ((out_z.argmax(axis=1)) == (expert_test_actions[1::2,2])).sum()/expert_test_actions[1::2,:].shape[0]
 
     print(f'Test Loss: {loss.item()} ')
-    #print(f'Test Z Acc: {loss_z} ')
+    print(f'Test Z Acc: {loss_z} ')
             
     torch.save(agent,f'bc_agent_unid_{epochs}_{agent.n_modes}_smoothed_one_step_new_last.pth')
 

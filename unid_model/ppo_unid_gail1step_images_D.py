@@ -18,8 +18,6 @@ from trafficenv_D import TrafficEnv
 from agents import AgentCNN_D as Agent
 from utils import load,load_all_mode
 
-Fully_matched_trajs_thresh = 20
-model_id = 0
 
 
 def parse_args():
@@ -41,13 +39,13 @@ def parse_args():
         help="whether to capture videos of the agent performances (check out `videos` folder)")
 
     # Algorithm specific arguments
-    parser.add_argument("--env-id", type=str, default="ind_gail_image",
+    parser.add_argument("--env-id", type=str, default="unid_rail_image",
         help="the id of the environment")
-    parser.add_argument("--total-timesteps", type=int, default=30000000,
+    parser.add_argument("--total-timesteps", type=int, default=6000000,
         help="total timesteps of the experiments")
-    parser.add_argument("--learning-rate", type=float, default=2.0e-3,
+    parser.add_argument("--learning-rate", type=float, default=3.0e-4,
         help="the learning rate of the optimizer")
-    parser.add_argument("--num-envs", type=int, default=64,
+    parser.add_argument("--num-envs", type=int, default=32,
         help="the number of parallel game environments")
     parser.add_argument("--num-steps", type=int, default=32,
         help="the number of steps to run in each environment per policy rollout")
@@ -63,7 +61,7 @@ def parse_args():
         help="the K epochs to update the policy")
     parser.add_argument("--norm-adv", type=lambda x: bool(strtobool(x)), default=False, nargs="?", const=True,
         help="Toggles advantages normalization")
-    parser.add_argument("--clip-coef", type=float, default=0.25,
+    parser.add_argument("--clip-coef", type=float, default=0.3,
         help="the surrogate clipping coefficient")
     parser.add_argument("--clip-vloss", type=lambda x: bool(strtobool(x)), default=True, nargs="?", const=True,
         help="Toggles whether or not to use a clipped loss for the value function, as per the paper.")
@@ -103,21 +101,21 @@ if __name__ == "__main__":
     clusterers = []
     
     
-    img_size = [20,30]#y,x
+    img_size = [20,40]#y,x
 
     envs = TrafficEnv(num_agents=args.num_envs,make_img=True,img_size=img_size,n_modes=N_MODES,first_step=True)
 
-    agent = Agent(envs,img_size=img_size,clusterers=clusterers).to(device)
-    agent = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_new.pth',map_location=device)
+    agent = Agent(envs,img_size=img_size,clusterers=clusterers,n_modes=N_MODES).to(device)
+    #agent = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_v3_0.pth',map_location=device)
 
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
     
-    
+    envs.set_training_progress(training_progress=0)
     done,new_state,new_img_state = envs.reset(num_agents=args.num_envs,max_steps=args.num_steps)
 
 
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs,10)).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs,10+envs.traj_mode_len)).to(device)
     obs_img = torch.zeros((args.num_steps, args.num_envs,3,img_size[1],img_size[0])).to(device)
     actions = torch.zeros((args.num_steps, args.num_envs) ).to(device)
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -134,6 +132,7 @@ if __name__ == "__main__":
     num_updates = args.total_timesteps // args.batch_size
 
     for update in range(1, num_updates + 1):
+        envs.set_training_progress(training_progress=global_step/args.total_timesteps)
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (update - 1.0) / num_updates
@@ -184,7 +183,7 @@ if __name__ == "__main__":
             returns = advantages + values
 
         # flatten the batch
-        b_obs = obs.reshape((-1,10) )
+        b_obs = obs.reshape((-1,10+envs.traj_mode_len) )
         b_img_obs = obs_img.reshape((-1,3,img_size[1],img_size[0]))
         b_logprobs = logprobs.reshape(-1)
         b_actions = actions.reshape((-1))
@@ -263,9 +262,6 @@ if __name__ == "__main__":
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step/(time.time()-start_time)), global_step)
         
-        # check if one mode is detected:
-        # TODO evaluate on validation
-                
     #envs.close()
     writer.close()
-    torch.save(agent,f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_new.pth')
+    torch.save(agent,f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_v3.pth')

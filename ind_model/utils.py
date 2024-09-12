@@ -8,7 +8,7 @@ import cv2
 import torch
 from torch.distributions.normal import Normal
 
-from agents import Agent_RL
+from agents import RLAgent
 
 #from sklearn.cluster import KMeans
 
@@ -67,6 +67,7 @@ def load(type_=0):
     
     expert_test_states_all = np.hstack(expert_test_states_all)
     expert_test_actions = yx_test_all[:,[0,1,22,23]].copy()
+
     return expert_states_all,expert_actions,expert_test_states_all,expert_test_actions
 
 
@@ -82,7 +83,7 @@ def load_all_mode(device,modes_n = 5, return_clusterers=False):
         expert_states_,expert_actions_,expert_test_states_,expert_test_actions_ = load(type_=type_)
         
         if True:#type_!=3:
-            smoothed_dp = np.unique(np.round(expert_actions_[:,:2],2),axis=0)
+            smoothed_dp = np.unique(np.round(expert_actions_[:,:2],1),axis=0)
             clusterer = KMeans(n_clusters=modes_n,random_state=42).fit(smoothed_dp)#,n_init=10
             clusterer_labels_ = clusterer.predict(expert_actions_[:,:2])
             expert_actions_ = (np.hstack((expert_actions_,clusterer_labels_[:,None])))#.to(device)
