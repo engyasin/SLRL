@@ -244,7 +244,7 @@ class TrafficEnv():
             lane_width = 2 
         
         self.grid = np.zeros((self.h,self.w,3)) # 1 pixel = 1 meter
-        self.full_grid = np.zeros((self.h*3,self.w*3,3))+128
+        self.full_grid = np.zeros((self.h*3,self.w*3,3))
 
         self.road,self.sidewalk,self.heading_img, self.ports = get_random_scene(self.w,self.h,lane_width=lane_width)
         
@@ -428,7 +428,7 @@ def main():
             #env.make_image_()
             env.render()
             if False:
-                plt.imshow(env.full_grid)
+                plt.imshow(env.full_grid[:,:,::-1])
                 plt.show()
             cv2.waitKey(1)
         print(all_rewards.mean())

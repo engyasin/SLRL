@@ -6,6 +6,7 @@ runs/
 indds/
 !bc_agent_ind_20_20_kmeans.pth
 !ppo_agent_ind_with_reward_20_cl.pth
+!ppo_agent_ind_with_reward_20_cl_not_learned.pth
 !ind_rewards_logprob.npy
 __pycache__/
 vis.py

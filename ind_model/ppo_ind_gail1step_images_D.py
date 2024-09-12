@@ -275,4 +275,4 @@ if __name__ == "__main__":
         
 
     writer.close()
-    torch.save(agent,f'ppo_agent_ind_with_reward_{N_MODES}_cl_not_learned.pth')
+    torch.save(agent,f'ppo_agent_ind_with_reward_{N_MODES}_cl.pth')

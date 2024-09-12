@@ -264,4 +264,4 @@ if __name__ == "__main__":
         
     #envs.close()
     writer.close()
-    torch.save(agent,f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_v3_no_learned_reward.pth')
+    torch.save(agent,f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][envs.first_step]}_v3.pth')
