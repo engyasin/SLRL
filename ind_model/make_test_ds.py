@@ -13,7 +13,7 @@ import glob,os
 import os
 import cv2
 
-from train_reward_offline import RewardModeSequance,LongTermDiscriminator
+from train_reward_offline import RewardModeSequance,LongTermDiscriminator,stat_model
 from utils import load_all_mode
 
 import torch
@@ -23,7 +23,7 @@ from trafficenv_D import TrafficEnv
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-SCENE_ID = 32#30:,31: ,32:
+SCENE_ID = 30#30:,31: ,32:
 class TrafficEnvMod(TrafficEnv):
     
     def __init__(self, w=182, h=114, num_agents=..., max_steps=17, make_img=False, 
@@ -40,7 +40,7 @@ class TrafficEnvMod(TrafficEnv):
         self.bg_img = cv2.resize(bg_img,dsize=[int(self.w),int(self.h)])
         self.wh = [self.w,self.h]
         
-        
+        self.fixed_reward_factor = 1.0
         road = np.zeros_like(self.bg_img)
         road[(self.bg_img == 255).all(axis=2),:] = 255
         
@@ -73,7 +73,7 @@ class TrafficEnvMod(TrafficEnv):
         self.initial_grid =  cv2.resize(bg_img,dsize=[int(self.w)*self.default_scale,
                                                       int(self.h)*self.default_scale])
         
-
+        self.full_reward_model = stat_model(divide_by=4,min_reward=-2)
         if self.first_step:
             self.bc_models = torch.load(f'bc_agent_ind_{20}_{n_modes}_kmeans.pth',map_location=self.device)
         else:
@@ -86,6 +86,8 @@ class TrafficEnvMod(TrafficEnv):
         _ = self.reset(num_agents=num_agents, max_steps=max_steps)
         
         self.reward_models = []#Discriminator()
+        self.collisions = 0
+        self.outOfRoad = 0
 
         
 
@@ -223,7 +225,7 @@ class TrafficEnvMod(TrafficEnv):
         self.history_poses = []
         self.history_poses.append(self.poses.copy())
 
-        self.history_z = (old_trajs_modes.T[-self.time:]).tolist()
+        self.history_z = (old_trajs_modes.T[-self.time:].astype(int)).tolist()
         
         return self.states.copy(),self.imgs_states
 
@@ -283,9 +285,9 @@ class TrafficEnvMod(TrafficEnv):
         self.full_grid[self.h:self.h*2,self.w:self.w*2,:] = self.grid.copy()
 
 
-    def rewards_test(self,actions,z):
+    #def rewards_test(self,actions,z):
         
-        return np.zeros_like(self.speeds)
+    #    return np.zeros_like(self.speeds)
 
 
 
@@ -296,16 +298,17 @@ if __name__ == '__main__':
     N_modes = 20 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     env = TrafficEnvMod(make_img=True,img_size=[20,40],device=device)
-    #model = torch.load('ppo_agent_ind_image_z.pth',map_location=torch.device('cpu'))
-    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_modes}_cl.pth',map_location=env.device)
+    #model = torch.load(f'ppo_agent_ind_with_reward_{N_modes}_cl_not_learned.pth',map_location=env.device)
+    model = torch.load(f'ppo_agent_ind_with_reward_{N_modes}_cl.pth',map_location=env.device)
 
     full_errors = []
-    max_steps = 18
+    max_steps = 2+30
     errors_dict_ped = {i:[] for i in range(max_steps)}
     errors_dict_bi = {i:[] for i in range(max_steps)}
     errors_dict_car = {i:[] for i in range(max_steps)}
     errors_dicts = [errors_dict_ped,errors_dict_bi,errors_dict_car]
     num_agents_minmax = []
+    all_rewards = []
     while env.time<2500:
         done,new_state,new_img_state = env.reset(max_steps=max_steps)
 
@@ -314,12 +317,13 @@ if __name__ == '__main__':
             action_ = np.random.random((env.num_agents,2+16))
             #new_img_state = abs(255-new_img_state)
             with torch.no_grad():
+                # NOTE uncomment here to swtich between RL and SL
                 # rl
-                #z_logits_ = model.get_action(torch.Tensor(new_state).to(env.device),torch.Tensor(new_img_state).to(env.device),best=True)
+                z_logits_ = model.get_action(torch.Tensor(new_state).to(env.device),torch.Tensor(new_img_state).to(env.device),best=True)
                 #z_logits = torch.nn.functional.one_hot(z_logits_,num_classes=20).to(device)
 
                 # bc
-                z_logits_ = env.bc_models.get_z(torch.Tensor(env.history[-1][:,:-env.traj_mode_len]).to(env.device)).argmax(axis=1)
+                #z_logits_ = env.bc_models.get_z(torch.Tensor(env.history[-1][:,:-env.traj_mode_len]).to(env.device)).argmax(axis=1)
 
                 #action_ = torch.hstack((action_t,torch.sigmoid(z_logits))).cpu().numpy()#*np.array([0.025,0])
 
@@ -341,6 +345,7 @@ if __name__ == '__main__':
                 set_rule = False
                 
             new_state, rewards, done,info,new_img_state = env.step(actions_d=(z_logits_.cpu().numpy()))#-env.poses)
+            all_rewards.append(rewards.mean())
             if all(done): continue
             new_state, new_img_state = env.update(poses,types,speeds,acceleration,headings,tracks)
             
@@ -362,7 +367,7 @@ if __name__ == '__main__':
         print(f'time: {env.time}')
         print(f'final error: {np.mean(full_errors)}')
         print('GAME OVER')
-
+    print(f'all rewards: {np.mean(all_rewards)}')
     print(f'max agents: {max(num_agents_minmax)}, mean: {np.mean(num_agents_minmax)}')
 
     for t in [0,1,2]:
