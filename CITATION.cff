@@ -1,0 +1,10 @@
+cff-version: 0.1.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: Yousif 
+  given-names: Yasin
+orcid: https://orcid.org/0000-0002-5282-7259 
+title:engyasin/SLRL: V0.1
+doi: 10.5281/zenodo.13884942 
+version: v0.1
+date-released: 2024-10-03

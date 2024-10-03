@@ -3,6 +3,11 @@
 ===========================================================
 
 
+
+[![DOI](https://zenodo.org/badge/805019355.svg)](https://doi.org/10.5281/zenodo.13884942)
+
+
+
 The Generizable Heterogeneous Multi-Agent Traffic Simulator (MATS) is a novel tool to gamify real traffic by utilizing a digital-twin of real traffic scenes. The proposed model here leverages both Supervised and Reinforcement Learning techniques to model complex traffic scenarios with scalabilty and realism.
 
 **Key Features:**
