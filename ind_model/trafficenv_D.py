@@ -155,7 +155,7 @@ class TrafficEnv():
         
         for i in range(self.num_agents):
             if done[i]: 
-                info.append({'episode':{'r':self.rs[i],'l':self.time,'collisions':self.collsions,'OutofRoad':self.outOfRoad}})
+                info.append({'episode':{'r':self.rs[i],'l':self.time,'collisions':self.collisions,'OutofRoad':self.outOfRoad}})
         if all(done):
             _ = self.reset(num_agents = self.num_agents , max_steps= self.max_time,training_time=training_time)
         else:
@@ -177,7 +177,7 @@ class TrafficEnv():
         rewards = -0.25*((((distances<2.0)*revert_self).sum(axis=1))[:,None])*self.fixed_reward_factor
         rewards = -0.9*((((distances<1.0)*revert_self).sum(axis=1))[:,None])*self.fixed_reward_factor
         rewards = -1.5*((((distances<0.4)*revert_self).sum(axis=1)*abs(self.speeds.T[0]))[:,None])*self.fixed_reward_factor
-        self.collsions += (((distances<0.3)*revert_self).sum(axis=1)[:,None]).sum()/2
+        self.collisions += (((distances<0.3)*revert_self).sum(axis=1)[:,None]).sum()/2
 
         #### check vrus on side walk or road TODO (quick on roads)
         vru_poses = (self.poses[(self.types<2)].T-0).astype(int)
@@ -199,7 +199,7 @@ class TrafficEnv():
             trajs = np.vstack(self.history_z).T[:,-min(self.time+1,self.traj_mode_len):]
             for type_ii,traj,act_d,n_i in zip(self.types,trajs,actions_d,range(self.num_agents)):
                 final_reward = np.zeros(self.n_modes)
-                traj_len = (traj != -1 ).sum()
+                traj_len = (traj != -1).sum()
                 for ii in range(traj_len):
                     final_reward += self.full_reward_model[type_ii][traj[ii],traj_len-ii-1]
                 rewards[n_i] += final_reward[act_d]/(traj_len)
@@ -296,7 +296,7 @@ class TrafficEnv():
         self.max_time = max_steps
         
         self.time = 0
-        self.collsions = 0
+        self.collisions = 0
         self.outOfRoad = 0
         
         self.rs = np.zeros((num_agents,1))

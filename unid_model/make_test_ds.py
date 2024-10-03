@@ -19,7 +19,7 @@ from trafficenv_D import TrafficEnv
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-SCENE_ID = 11# 11:2590,12:2240
+SCENE_ID = 12# 11:2590,12:2240
 
 class TrafficEnvMod(TrafficEnv):
     
@@ -265,9 +265,9 @@ class TrafficEnvMod(TrafficEnv):
 
         return [False for _ in range(self.num_agents)], self.states, self.imgs_states
 
-    def rewards_test(self,actions,z):
+    #def rewards_test(self,actions,z):
         
-        return np.zeros_like(self.speeds)
+    #    return np.zeros_like(self.speeds)
 
 
 
@@ -280,8 +280,8 @@ if __name__ == '__main__':
     
     env = TrafficEnvMod(make_img=True,img_size=[20,40],first_step=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #model = torch.load('ppo_agent_unid_image_d_last_step_1.pth',map_location=device)
-    model = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][env.first_step]}_v3.pth',map_location=device)
+    model = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][env.first_step]}_v3_no_learned_reward.pth',map_location=device)
+    #model = torch.load(f'ppo_agent_unid_image_d_smoothed_{["last_step","first_step"][env.first_step]}_v3.pth',map_location=device)
     
     full_errors = []
     errors_dict_ped = {i:[] for i in range(max_steps)}
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     errors_dict_car = {i:[] for i in range(max_steps)}
     errors_dicts = [errors_dict_ped,errors_dict_bi,errors_dict_car]
     num_agents_minmax = []
-    while env.time<2590:
+    while env.time<([2240,2590][SCENE_ID == 11]):
         done,new_state,new_img_state = env.reset(max_steps=max_steps)
 
         step_order = 1

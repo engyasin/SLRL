@@ -11,8 +11,8 @@ from sklearn.cluster import KMeans
 import glob,os
 import os
 import cv2
+import time
 
-from agents import Discriminator
 from utils import load_all_mode
 import torch
 from trafficenv_D import TrafficEnv
@@ -26,7 +26,7 @@ from matplotlib import pyplot as plt
 
 class TrafficEnvMod(TrafficEnv):
     
-    def __init__(self,w=182,h=114,num_agents = 15 + np.random.randint(15),max_steps=17,make_img=False,img_size=[10,10],n_modes=20):
+    def __init__(self,w=182,h=114,num_agents = 15 + np.random.randint(15),max_steps=17,make_img=False,img_size=[20,40],n_modes=20):
 
         self.speed_record = []
         super().__init__(w, h, num_agents, max_steps,  make_img, img_size,n_modes)
@@ -57,7 +57,6 @@ class TrafficEnvMod(TrafficEnv):
         self.time = 0
         self.road,self.sidewalk,self.heading_img, self.ports = road.copy(),sidewalk.copy()/2,sidewalk.copy()/2,[2,self.h-2,4,self.w]
         
-        
 
     def reset(self, num_agents = 15 + np.random.randint(15),max_steps=17,training_time=1):
 
@@ -67,6 +66,7 @@ class TrafficEnvMod(TrafficEnv):
         self.load_ds_scene()
         self.num_agents = num_agents
         self.grid = np.zeros((self.h,self.w,3)) # 1 pixel = 1 meter
+        self.full_grid = np.zeros((self.h*3,self.w*3,3))
 
         self.initial_grid = cv2.resize((self.road+self.sidewalk),
                                        dsize=[self.w*self.default_scale,self.h*self.default_scale],
@@ -108,7 +108,7 @@ class TrafficEnvMod(TrafficEnv):
         self.time = 0
         self.rs = 0
         self.near_objs = self.update_near_objs()
-        self.collsions = 0
+        self.collisions = 0
         self.outOfRoad = 0
         
         if self.make_img:
@@ -123,6 +123,8 @@ class TrafficEnvMod(TrafficEnv):
         self.history_poses = []
         self.history_poses.append(self.poses.copy())       
         self.history_z = []
+
+
 
         return [False for _ in range(self.num_agents)], self.states, self.imgs_states
     
@@ -150,37 +152,213 @@ class TrafficEnvMod(TrafficEnv):
             
         return sucess_rate,avg_survival,all_speeds_avgs
             
-        
-def main():
-    N_MODES=20
-    episode_length = 64
-    env = TrafficEnvMod(make_img=True,num_agents=64,img_size=[20,40],n_modes=N_MODES)#[12,20]
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = torch.load(f'ppo_agent_ind_image_d_smoothed_first_step_kmeans_with_reward_{N_MODES}_cl.pth',map_location=env.device)
+
+def run_model(n_episodes,env,episode_length,model):
 
     sucess_r, avg_surv, avg_speed, collisions, full_rewards, out_of_road = [],[],[],[],[],[]
 
-    for scene in range(64):
-        done,new_state,new_img_state = env.reset(num_agents=1*(scene+5),max_steps=episode_length)# TODO check n agents
+    for scene in range(n_episodes):
+        done,new_state,new_img_state = env.reset(num_agents=(scene+2),max_steps=episode_length)# TODO check n agents
         all_rewards = 0
         while sum(done)==0:
-            with torch.no_grad():
-                action = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True).cpu().numpy()
+            if model:
+                with torch.no_grad():
+                    action = model.get_action(torch.Tensor(new_state).to(device),torch.Tensor(new_img_state).to(device),best=True).cpu().numpy()
+            else:
+                action = None
 
             new_state, rewards, done, info, new_img_state = env.step(action)#-env.poses)
             env.find_statics()
             all_rewards += rewards
 
+
         collisions.append(info[0]['episode']['collisions'])
         out_of_road.append(info[0]['episode']['OutofRoad'])
-        full_rewards.append(all_rewards.sum()) # for all agents
-        sucess_r.append(env.all_statics[0]) 
-        avg_surv.append(np.nan_to_num(env.all_statics[1][:]))
-        avg_speed.append(np.nan_to_num(env.all_statics[2][:]))
+        full_rewards.append(all_rewards.mean()) # for all agents
+
+
+        if np.nan not in [env.all_statics[0]]:
+            sucess_r.append(np.nan_to_num(env.all_statics[0]))
+        if np.nan not in env.all_statics[1][:]:
+            avg_surv.append(np.nan_to_num(env.all_statics[1][:]))
+        if np.nan not in env.all_statics[2][:]:
+            avg_speed.append(np.nan_to_num(env.all_statics[2][:]))
+        
+        
         
         print(all_rewards.sum())
         print('GAME OVER')
+
+    return sucess_r, avg_surv, avg_speed, collisions, full_rewards, out_of_road 
+
+
+def find_time():
+
+    N_MODES=20
+    episode_length = 64
+    n_episodes = 64
+
+
+
+    env = TrafficEnvMod(make_img=True,num_agents=64,img_size=[20,40],n_modes=N_MODES)#[12,20]
+    agents_time = []
+    for scene in range(n_episodes):
+
+        start_time = time.time()
+        done,new_state,new_img_state = env.reset(num_agents=(scene+1)*2,max_steps=episode_length)# TODO check n agents
+        while sum(done)==0:
+
+            new_state, rewards, done, info, new_img_state = env.step()#-env.poses)
+        end_time = time.time()
+
+        agents_time.append([(scene+1)*2,end_time-start_time])
+        print('GAME OVER')
+
+    plt.plot(np.array(agents_time)[:,0],np.array(agents_time)[:,1])
+    plt.xlabel('Number of agents')
+    plt.ylabel('Seconds')
+    plt.title('Run-time over number of agents for InD environement')
+    plt.show()
+
+
+def main():
+
+    N_MODES=20
+    episode_length = 64
+    n_episodes = 64
+
+
+    env = TrafficEnvMod(make_img=True,num_agents=64,img_size=[20,40],n_modes=N_MODES)#[12,20]
+    sucess_rS, avg_survS, avg_speedS, collisionsS, full_rewardsS, out_of_roadS = [],[],[],[],[],[]
+
+    for i in range(3):
+        if i == 0:
+            model = torch.load(f'ppo_agent_ind_with_reward_{N_MODES}_cl.pth',map_location=env.device)
+        elif i == 1:
+            model = torch.load(f'ppo_agent_ind_with_reward_{N_MODES}_cl_not_learned.pth',map_location=env.device)
+        elif i == 2:
+            model = None#torch.load(f'bc_agent_ind_{20}_{N_MODES}_kmeans.pth',map_location=env.device)
+
+        sucess_r, avg_surv, avg_speed, collisions, full_rewards, out_of_road = run_model(n_episodes,env,episode_length,model)
+        avg_speed = np.array(avg_speed)
+        avg_surv = np.array(avg_surv)
+
+        avg_survS.append(avg_surv)
+        avg_speedS.append(avg_speed)
+        collisionsS.append(collisions)
+        sucess_rS.append(sucess_r)
+        full_rewardsS.append(full_rewards)
+        out_of_roadS.append(out_of_road)
+
+
+
+    plt.subplot(231)
+    plt.title('Avg survival ped')
+    plt.plot(avg_survS[0][:,0]*0.4,label=f'RAIL ({np.mean(avg_survS[0][:,0]*0.4):.1f})')
+    plt.plot(avg_survS[1][:,0]*0.4,marker='+',label=f'RL ({np.mean(avg_survS[1][:,0]*0.4):.1f})')
+    plt.plot(avg_survS[2][:,0]*0.4,marker='*',label=f'SL ({np.mean(avg_survS[2][:,0]*0.4):.1f})')
+    #plt.xlabel('Number of agents')
+    plt.ylabel('seconds')
+    plt.legend()
+
+    plt.subplot(234)
+    plt.title('Avg speed ped')
+    plt.plot(avg_speedS[0][:,0],label=f'RAIL ({np.mean(avg_speedS[0][:,0]):.1f})')
+    plt.plot(avg_speedS[1][:,0],marker='+',label=f'RL ({np.mean(avg_speedS[1][:,0]):.1f})')
+    plt.plot(avg_speedS[2][:,0],marker='*',label=f'SL ({np.mean(avg_speedS[2][:,0]):.1f})')
+    plt.plot(np.ones(len(avg_speedS[2][:,0]))*1.33,'k--',label=f'GT ({1.3})')
+    plt.xlabel('Number of agents')
+    plt.ylabel('m/s')
+
+    plt.legend()
+
+
+    plt.subplot(232)
+    plt.title('Avg survival bike')
+    plt.plot(avg_survS[0][:,1]*0.4,label=f'RAIL ({np.mean(avg_survS[0][:,1]*0.4):.1f})')
+    plt.plot(avg_survS[1][:,1]*0.4,marker='+',label=f'RL ({np.mean(avg_survS[1][:,1]*0.4):.1f})')
+    plt.plot(avg_survS[2][:,1]*0.4,marker='*',label=f'SL ({np.mean(avg_survS[2][:,1]*0.4):.1f})')
+    #plt.xlabel('Number of agents')
+    plt.ylabel('seconds')
+    plt.legend()
+
+
+    plt.subplot(235)
+    plt.title('Avg speed bike')
+    plt.plot(avg_speedS[0][:,1],label=f'RAIL ({np.mean(avg_speedS[0][:,1]):.1f})')
+    plt.plot(avg_speedS[1][:,1],marker='+',label=f'RL ({np.mean(avg_speedS[1][:,1]):.1f})')
+    plt.plot(avg_speedS[2][:,1],marker='*',label=f'SL ({np.mean(avg_speedS[2][:,1]):.1f})')
+    plt.plot(np.ones(len(avg_speedS[2][:,1]))*3.8,'k--',label=f'GT {3.8}')
+    plt.xlabel('Number of agents')
+    plt.ylabel('m/s')
+    plt.legend()
+
+    plt.subplot(233)
+    plt.title('Avg survival car')
+    plt.plot(avg_survS[0][:,2]*0.4,label=f'RAIL ({np.mean(avg_survS[0][:,2]*0.4):.1f})')
+    plt.plot(avg_survS[1][:,2]*0.4,marker='+',label=f'RL ({np.mean(avg_survS[1][:,2]*0.4):.1f})')
+    plt.plot(avg_survS[2][:,2]*0.4,marker='*',label=f'SL ({np.mean(avg_survS[2][:,2]*0.4):.1f})')
+    #plt.xlabel('Number of agents')
+    plt.ylabel('seconds')
+    plt.legend()
+
+
+    plt.subplot(2,3,6)
+    plt.title('Avg speed car')
+    plt.plot(avg_speedS[0][:,2],label=f'RAIL ({np.mean(avg_speedS[0][:,2]):.1f})')
+    plt.plot(avg_speedS[1][:,2],marker='+',label=f'RL ({np.mean(avg_speedS[1][:,2]):.1f})')
+    plt.plot(avg_speedS[2][:,2],marker='*',label=f'SL ({np.mean(avg_speedS[2][:,2]):.1f})')
+    plt.plot(np.ones(len(avg_speedS[2][:,2]))*2.9,'k--',label=f'GT {2.9}')
+    plt.xlabel('Number of agents')
+    plt.ylabel('m/s')
+    plt.legend()
+
+
+    #plt.suptitle('Average speed and survival time for InD')
+
+    plt.show()
+
+    plt.clf()
+
+    plt.subplot(141)
+    plt.title('Collisions count')
+    plt.plot(collisionsS[0],label=f'RAIL ({np.mean(collisionsS[0]):.1f})')
+    plt.plot(collisionsS[1],marker='+',label=f'RL ({np.mean(collisionsS[1]):.1f})')
+    plt.plot(collisionsS[2],marker='*',label=f'SL ({np.mean(collisionsS[2]):.1f})')
+    plt.xlabel('Number of agents')
+    plt.legend()
+    
+
+    plt.subplot(142)
+    plt.title('Episodic Reward')
+    plt.plot(full_rewardsS[0],label=f'RAIL ({np.mean(full_rewardsS[0]):.1f})')
+    plt.plot(full_rewardsS[1],marker='+',label=f'RL ({np.mean(full_rewardsS[1]):.1f})')
+    plt.plot(full_rewardsS[2],marker='*',label=f'SL ({np.mean(full_rewardsS[2]):.1f})')
+    plt.xlabel('Number of agents')
+    plt.legend()
+
+    plt.subplot(143)
+    plt.title('Out-of-road frequency')
+    plt.plot(out_of_roadS[0],label=f'RAIL ({np.mean(out_of_roadS[0]):.1f})')
+    plt.plot(out_of_roadS[1],marker='+',label=f'RL ({np.mean(out_of_roadS[1]):.1f})')
+    plt.plot(out_of_roadS[2],marker='*',label=f'SL ({np.mean(out_of_roadS[2]):.1f})')
+    plt.xlabel('Number of agents')
+    plt.legend()
+
+    plt.subplot(144)
+    plt.title('Success rate')
+    plt.plot(sucess_rS[0],label=f'RAIL ({np.mean(sucess_rS[0]):.2f})')
+    plt.plot(sucess_rS[1],marker='+',label=f'RL ({np.mean(sucess_rS[1]):.2f})')
+    plt.plot(sucess_rS[2],marker='*',label=f'SL ({np.mean(sucess_rS[2]):.2f})')
+    plt.xlabel('Number of agents')
+    plt.legend()
+
+    #plt.suptitle('Collision, Rewards, Success rate and Out-of-road for InD')
+
+    plt.show()
+
+
+    return 0
 
     print(np.mean(sucess_r),np.std(sucess_r))
     print(np.mean(avg_surv,axis=0),np.std(avg_surv,axis=0))
@@ -200,7 +378,7 @@ def main():
     plt.plot(out_of_road)
 
     plt.subplot(253)
-    plt.title('full_rewards')
+    plt.title('average_epi_rewards')
     plt.plot(full_rewards)
 
     plt.subplot(254)
@@ -234,5 +412,5 @@ def main():
     plt.show()
 
 if __name__=='__main__':
-    
+    #find_time()
     main()
