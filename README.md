@@ -23,8 +23,8 @@ The Generizable Heterogeneous Multi-Agent Traffic Simulator (MATS) is a novel to
 * **Realism**: Trained on real traffic trajectories to imitate it in both short-term (with supervised learning) and long-term (with reinforcement learning)
 
 
-<p align="center" style="background-color:white;">
-  <img src="methodology.png" style="background-color:white;"/>
+<p align="center">
+  <img src="methodology.svg" style="background-color:white;"/>
 </p>
 
 The provided codebase includes comprehensive scripts for both model training and simulation. The latter can be executed independently to test various multi-agent traffic models, empowering new works to explore and validate different Multi-agent Reinforcement Learning (MARL) algorthems.
@@ -37,22 +37,28 @@ The following are video demonstrations of MATS, for increasing number of agents 
 
 <!--![](ind_model/InD.gif)-->
 
+
 <table>
   <thead>
     <tr>
-      <th><center>Shared Space Case</center></th>
       <th><center>Intersection Case</center></th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>
-        <img src='unid_model/UniD.gif' width="100%" />
-      </td>
-      <td>
         <img src='ind_model/InD.gif' width="100%" />
       </td>
     </tr>
+    <tr>
+      <th><center>Shared Space Case</center></th>
+    </tr>
+    <tr>
+      <td>
+        <img src='unid_model/UniD.gif' width="100%" />
+      </td>
+    </tr>
+    <tr>
   </tbody>
 </table>
 
@@ -96,7 +102,7 @@ To view the prediction results and the preprocessed data, check the notebooks  `
 
 
 ```bibtex
-@InProceedings{yousif2024,
+@Inproceedings{yousif2024,
     author="Yousif, Yasin and Müller, Jörg",
     title="Integrating Supervised and Reinforcement Learning for Heterogeneous Traffic Simulation",
     booktitle="Advances in Practical Applications of Agents, Multi-Agent Systems.",
