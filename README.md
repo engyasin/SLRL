@@ -98,8 +98,6 @@ To view the prediction results and the preprocessed data, check the notebooks  `
 ## Citation:
 
 
-*Will change later* 
-
 
 ```bibtex
 @inproceedings{yousif2024integrating,
@@ -112,11 +110,6 @@ To view the prediction results and the preprocessed data, check the notebooks  `
 }
 
 ```
-
-
-
-
-
 
 
 
