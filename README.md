@@ -102,15 +102,15 @@ To view the prediction results and the preprocessed data, check the notebooks  `
 
 
 ```bibtex
-@Inproceedings{yousif2024,
-    author="Yousif, Yasin and Müller, Jörg",
-    title="Integrating Supervised and Reinforcement Learning for Heterogeneous Traffic Simulation",
-    booktitle="Advances in Practical Applications of Agents, Multi-Agent Systems.",
-    year="2024",
-    publisher="Springer Nature Switzerland",
-    address="Cham",
-    note="To appear in November 2024"
+@inproceedings{yousif2024integrating,
+  title={Integrating Supervised and Reinforcement Learning for Heterogeneous Traffic Simulation},
+  author={Yousif, Yasin M and M{\"u}ller, J{\"o}rg P},
+  booktitle={International Conference on Practical Applications of Agents and Multi-Agent Systems},
+  pages={277--288},
+  year={2024},
+  organization={Springer}
 }
+
 ```
 
 
