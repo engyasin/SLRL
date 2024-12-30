@@ -116,9 +116,6 @@ To view the prediction results and the preprocessed data, check the notebooks  `
 
 
 
-
-
-
 ## Help
 
 If you need help, please create a new issue by clicking the "New issue" button on our repository's issue tracker page. Provide as much detail as possible about the issue you're experiencing, including:
